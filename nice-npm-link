@@ -1,0 +1,200 @@
+#!/usr/bin/env node
+
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+// Default list of packages that commonly cause conflicts when linking components
+const DEFAULT_CONFLICTING_PACKAGES = [
+  'react',
+  'react-dom',
+  'styled-components',
+  '@types/react',
+  '@types/react-dom'
+];
+
+function log(message) {
+  console.log(`📦 ${message}`);
+}
+
+function error(message) {
+  console.error(`❌ ${message}`);
+}
+
+function success(message) {
+  console.log(`✅ ${message}`);
+}
+
+function removeConflictingPackages(packagesToRemove) {
+  const nodeModulesPath = path.join(process.cwd(), 'node_modules');
+
+  if (!fs.existsSync(nodeModulesPath)) {
+    log('No node_modules directory found, skipping package cleanup');
+    return;
+  }
+
+  log('Removing conflicting packages from node_modules...');
+
+  for (const pkg of packagesToRemove) {
+    const pkgPath = path.join(nodeModulesPath, pkg);
+    if (fs.existsSync(pkgPath)) {
+      try {
+        fs.rmSync(pkgPath, { recursive: true, force: true });
+        success(`Removed ${pkg}`);
+      } catch (err) {
+        error(`Failed to remove ${pkg}: ${err.message}`);
+      }
+    }
+  }
+}
+
+function linkPackage(packagePath) {
+  try {
+    log(`Linking package from ${packagePath}...`);
+
+    // Navigate to the package directory and run npm link
+    const originalCwd = process.cwd();
+    process.chdir(packagePath);
+
+    execSync('npm link', { stdio: 'inherit' });
+    success(`Created global link for package in ${packagePath}`);
+
+    // Get package name from package.json
+    const packageJsonPath = path.join(packagePath, 'package.json');
+    if (!fs.existsSync(packageJsonPath)) {
+      throw new Error('package.json not found in package directory');
+    }
+
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const packageName = packageJson.name;
+
+    // Return to original directory and link the package
+    process.chdir(originalCwd);
+    execSync(`npm link ${packageName}`, { stdio: 'inherit' });
+    success(`Linked ${packageName} to current project`);
+
+    return packageName;
+  } catch (err) {
+    error(`Failed to link package: ${err.message}`);
+    throw err;
+  }
+}
+
+function showUsage() {
+  console.log(`
+Usage: nice-npm-link [options] <package-path>
+
+Options:
+  --clean-only              Only remove conflicting packages, don't link anything
+  --exclude <packages>      Comma-separated list of packages to remove (overrides defaults)
+  --add-exclude <packages>  Comma-separated list of additional packages to remove
+  --help, -h                Show this help message
+
+Examples:
+  nice-npm-link ../nice-react-button
+  nice-npm-link --clean-only
+  nice-npm-link --exclude react,react-dom ../nice-react-button
+  nice-npm-link --add-exclude @emotion/react,@emotion/styled ../nice-react-button
+  nice-npm-link /path/to/my/component
+
+Default packages removed:
+  ${DEFAULT_CONFLICTING_PACKAGES.join(', ')}
+
+This tool will:
+1. Remove conflicting packages from node_modules
+2. Create a global npm link for the specified package
+3. Link the package to the current project
+`);
+}
+
+function parsePackageList(packagesString) {
+  return packagesString
+    .split(',')
+    .map(pkg => pkg.trim())
+    .filter(pkg => pkg.length > 0);
+}
+
+function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('--help') || args.includes('-h')) {
+    showUsage();
+    process.exit(0);
+  }
+
+  // Parse package exclusion options
+  let packagesToRemove = [...DEFAULT_CONFLICTING_PACKAGES];
+
+  const excludeIndex = args.indexOf('--exclude');
+  if (excludeIndex !== -1 && args[excludeIndex + 1]) {
+    // Override default packages with custom list
+    packagesToRemove = parsePackageList(args[excludeIndex + 1]);
+    log(`Using custom exclude list: ${packagesToRemove.join(', ')}`);
+  }
+
+  const addExcludeIndex = args.indexOf('--add-exclude');
+  if (addExcludeIndex !== -1 && args[addExcludeIndex + 1]) {
+    // Add additional packages to the default list
+    const additionalPackages = parsePackageList(args[addExcludeIndex + 1]);
+    packagesToRemove = [...new Set([...packagesToRemove, ...additionalPackages])];
+    log(`Adding to exclude list: ${additionalPackages.join(', ')}`);
+  }
+
+  const cleanOnly = args.includes('--clean-only');
+
+  if (cleanOnly) {
+    removeConflictingPackages(packagesToRemove);
+    success('Package cleanup completed');
+    return;
+  }
+
+  // Find package path (skip option arguments)
+  const packagePath = args.find((arg, index) => {
+    if (arg.startsWith('--')) return false;
+    // Check if this is a value for an option
+    const prevArg = args[index - 1];
+    if (prevArg && (prevArg === '--exclude' || prevArg === '--add-exclude')) {
+      return false;
+    }
+    return true;
+  });
+
+  if (!packagePath) {
+    error('Please provide a path to the package you want to link');
+    showUsage();
+    process.exit(1);
+  }
+
+  const resolvedPath = path.resolve(packagePath);
+
+  if (!fs.existsSync(resolvedPath)) {
+    error(`Package path does not exist: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(path.join(resolvedPath, 'package.json'))) {
+    error(`No package.json found in: ${resolvedPath}`);
+    process.exit(1);
+  }
+
+  try {
+    removeConflictingPackages(packagesToRemove);
+    const packageName = linkPackage(resolvedPath);
+    success(`Successfully linked ${packageName}!`);
+
+    log('\nNext steps:');
+    log('- Your package is now linked and ready to use');
+    log('- Make changes to your linked package and they will be reflected immediately');
+    log(`- To unlink later, run: npm unlink ${packageName}`);
+
+  } catch (err) {
+    error('Operation failed');
+    process.exit(1);
+  }
+}
+
+if (require.main === module) {
+  main();
+}
+
+module.exports = { removeConflictingPackages, linkPackage };
