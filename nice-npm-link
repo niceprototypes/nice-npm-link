@@ -180,6 +180,8 @@ function main() {
   try {
     removeConflictingPackages(packagesToRemove);
     const packageName = linkPackage(resolvedPath);
+    // Remove conflicting packages again after linking (they get reinstalled during npm link)
+    removeConflictingPackages(packagesToRemove);
     success(`Successfully linked ${packageName}!`);
 
     log('\nNext steps:');

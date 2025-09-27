@@ -4,7 +4,7 @@
   "description": "A utility to manage npm linking for nice-react components, automatically removing conflicting peer dependencies",
   "main": "index.js",
   "bin": {
-    "nice-npm-link": "./nice-npm-link"
+    "nice-npm-link": "nice-npm-link"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -21,6 +21,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/niceprototypes/nice-npm-link.git"
+    "url": "git+https://github.com/niceprototypes/nice-npm-link.git"
   }
 }
