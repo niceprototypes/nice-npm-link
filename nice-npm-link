@@ -33,9 +33,30 @@ function removeConflictingPackages(packagesToRemove) {
     return;
   }
 
+  // Check if react-scripts is present - if so, preserve react and react-dom
+  const packageJsonPath = path.join(process.cwd(), 'package.json');
+  let filteredPackages = [...packagesToRemove];
+
+  if (fs.existsSync(packageJsonPath)) {
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
+
+    if (deps['react-scripts']) {
+      filteredPackages = packagesToRemove.filter(pkg => !['react', 'react-dom'].includes(pkg));
+      if (filteredPackages.length !== packagesToRemove.length) {
+        log('Preserving react and react-dom for react-scripts compatibility');
+      }
+    }
+  }
+
+  if (filteredPackages.length === 0) {
+    log('No conflicting packages to remove');
+    return;
+  }
+
   log('Removing conflicting packages from node_modules...');
 
-  for (const pkg of packagesToRemove) {
+  for (const pkg of filteredPackages) {
     const pkgPath = path.join(nodeModulesPath, pkg);
     if (fs.existsSync(pkgPath)) {
       try {
