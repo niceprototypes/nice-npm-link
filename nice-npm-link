@@ -1,223 +1,322 @@
 #!/usr/bin/env node
+/**
+ * nice-npm-link (enhanced)
+ * - Links a local package (components library) into the current project
+ * - Prevents duplicate React (and friends) by:
+ *     1) enforcing peerDependencies in the linked package
+ *     2) removing conflicting deps from the LINKED PACKAGE's node_modules
+ * - Detects package manager (npm | yarn | pnpm) with override
+ * - Safer cwd handling, optional dry-run, clearer logs
+ *
+ * Usage:
+ *   nnl <path> [--dry-run] [--clean-only]
+ *       [--exclude a,b,c] [--add-exclude x,y]
+ *       [--manager npm|yarn|pnpm] [--skip-peer-check]
+ *
+ * Examples:
+ *   nnl ../my-lib
+ *   nnl --clean-only --add-exclude @emotion/react,@emotion/styled ../my-lib
+ *   nnl --manager pnpm ../my-lib
+ */
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
-// Default list of packages that commonly cause conflicts when linking components
+// -------- Config --------
 const DEFAULT_CONFLICTING_PACKAGES = [
   'react',
   'react-dom',
+  'scheduler',
+  'react-is',
   'styled-components',
+  '@emotion/react',
+  '@emotion/styled',
   '@types/react',
   '@types/react-dom'
 ];
 
-function log(message) {
-  console.log(`📦 ${message}`);
-}
+const PEER_ENFORCE = ['react', 'react-dom'];
 
-function error(message) {
-  console.error(`❌ ${message}`);
-}
+// -------- Utils --------
+const cyan = s => `\x1b[36m${s}\x1b[0m`;
+const gray = s => `\x1b[90m${s}\x1b[0m`;
+const green = s => `\x1b[32m${s}\x1b[0m`;
+const red = s => `\x1b[31m${s}\x1b[0m`;
+const yellow = s => `\x1b[33m${s}\x1b[0m`;
 
-function success(message) {
-  console.log(`✅ ${message}`);
-}
-
-function removeConflictingPackages(packagesToRemove) {
-  const nodeModulesPath = path.join(process.cwd(), 'node_modules');
-
-  if (!fs.existsSync(nodeModulesPath)) {
-    log('No node_modules directory found, skipping package cleanup');
-    return;
-  }
-
-  // Check if react-scripts is present - if so, preserve react and react-dom
-  const packageJsonPath = path.join(process.cwd(), 'package.json');
-  let filteredPackages = [...packagesToRemove];
-
-  if (fs.existsSync(packageJsonPath)) {
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies };
-
-    if (deps['react-scripts']) {
-      filteredPackages = packagesToRemove.filter(pkg => !['react', 'react-dom'].includes(pkg));
-      if (filteredPackages.length !== packagesToRemove.length) {
-        log('Preserving react and react-dom for react-scripts compatibility');
-      }
-    }
-  }
-
-  if (filteredPackages.length === 0) {
-    log('No conflicting packages to remove');
-    return;
-  }
-
-  log('Removing conflicting packages from node_modules...');
-
-  for (const pkg of filteredPackages) {
-    const pkgPath = path.join(nodeModulesPath, pkg);
-    if (fs.existsSync(pkgPath)) {
-      try {
-        fs.rmSync(pkgPath, { recursive: true, force: true });
-        success(`Removed ${pkg}`);
-      } catch (err) {
-        error(`Failed to remove ${pkg}: ${err.message}`);
-      }
-    }
-  }
-}
-
-function linkPackage(packagePath) {
-  try {
-    log(`Linking package from ${packagePath}...`);
-
-    // Navigate to the package directory and run npm link
-    const originalCwd = process.cwd();
-    process.chdir(packagePath);
-
-    execSync('npm link', { stdio: 'inherit' });
-    success(`Created global link for package in ${packagePath}`);
-
-    // Get package name from package.json
-    const packageJsonPath = path.join(packagePath, 'package.json');
-    if (!fs.existsSync(packageJsonPath)) {
-      throw new Error('package.json not found in package directory');
-    }
-
-    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-    const packageName = packageJson.name;
-
-    // Return to original directory and link the package
-    process.chdir(originalCwd);
-    execSync(`npm link ${packageName}`, { stdio: 'inherit' });
-    success(`Linked ${packageName} to current project`);
-
-    return packageName;
-  } catch (err) {
-    error(`Failed to link package: ${err.message}`);
-    throw err;
-  }
-}
+function log(msg) { console.log(`📦 ${msg}`); }
+function info(msg) { console.log(gray(`ℹ︎ ${msg}`)); }
+function success(msg) { console.log(green(`✅ ${msg}`)); }
+function warn(msg) { console.log(yellow(`⚠️  ${msg}`)); }
+function fail(msg) { console.error(red(`❌ ${msg}`)); }
 
 function showUsage() {
   console.log(`
-Usage: nice-npm-link [options] <package-path>
+${cyan('nice-npm-link (enhanced)')}
+
+Usage:
+  nnl <package-path> [options]
 
 Options:
-  --clean-only              Only remove conflicting packages, don't link anything
-  --exclude <packages>      Comma-separated list of packages to remove (overrides defaults)
-  --add-exclude <packages>  Comma-separated list of additional packages to remove
-  --help, -h                Show this help message
+  --clean-only               Only clean conflicts in the linked package; do not link
+  --exclude <a,b,c>          Comma-separated list of packages to remove (overrides defaults)
+  --add-exclude <a,b,c>      Comma-separated list of additional packages to remove
+  --dry-run                  Show what would happen without making changes
+  --manager <npm|yarn|pnpm>  Force a package manager (auto-detected by default)
+  --skip-peer-check          Do not auto-move react/react-dom to peerDependencies
+  --help, -h                 Show help
 
-Examples:
-  nice-npm-link ../nice-react-button
-  nice-npm-link --clean-only
-  nice-npm-link --exclude react,react-dom ../nice-react-button
-  nice-npm-link --add-exclude @emotion/react,@emotion/styled ../nice-react-button
-  nice-npm-link /path/to/my/component
-
-Default packages removed:
-  ${DEFAULT_CONFLICTING_PACKAGES.join(', ')}
-
-This tool will:
-1. Remove conflicting packages from node_modules
-2. Create a global npm link for the specified package
-3. Link the package to the current project
+Notes:
+  • Conflicts are removed from the ${cyan('LINKED PACKAGE')} node_modules, not your app.
+  • Ensure your component library lists React as peerDependency.
+  • For CRA, you may need: export NODE_OPTIONS=--preserve-symlinks
+  • Workspaces often remove the need for manual linking; consider "workspace:" or local file deps.
 `);
 }
 
-function parsePackageList(packagesString) {
-  return packagesString
-    .split(',')
-    .map(pkg => pkg.trim())
-    .filter(pkg => pkg.length > 0);
+// -------- Arg parsing --------
+function parseList(s) {
+  return s.split(',').map(x => x.trim()).filter(Boolean);
 }
 
+function getArg(args, name) {
+  const i = args.indexOf(name);
+  return i !== -1 ? args[i + 1] : null;
+}
+
+function detectPM(cwd = process.cwd()) {
+  if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn';
+  return 'npm';
+}
+
+function run(pm, argv, opts = {}) {
+  const cmd = pm;
+  const result = spawnSync(cmd, argv, { stdio: 'inherit', shell: process.platform === 'win32', ...opts });
+  if (result.error) throw result.error;
+  if (result.status !== 0) throw new Error(`${cmd} ${argv.join(' ')} exited with code ${result.status}`);
+}
+
+function readJSON(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function writeJSON(file, obj) {
+  fs.writeFileSync(file, JSON.stringify(obj, null, 2));
+}
+
+// -------- Core helpers --------
+function removeConflictsInDir(dir, packages, { dryRun } = {}) {
+  const nm = path.join(dir, 'node_modules');
+  if (!fs.existsSync(nm)) {
+    info(`No node_modules in ${dir}, skipping clean`);
+    return;
+  }
+  if (!packages.length) return;
+
+  log(`Cleaning conflicts in ${gray(dir)}: ${packages.join(', ')}`);
+  for (const pkg of packages) {
+    const p = path.join(nm, pkg);
+    if (fs.existsSync(p)) {
+      if (dryRun) {
+        info(`[dry-run] would remove ${p}`);
+      } else {
+        try {
+          fs.rmSync(p, { recursive: true, force: true });
+          success(`Removed ${gray(path.relative(process.cwd(), p))}`);
+        } catch (e) {
+          fail(`Failed to remove ${pkg} in ${dir}: ${e.message}`);
+        }
+      }
+    }
+  }
+}
+
+function ensurePeerDeps(packageDir, names, { dryRun } = {}) {
+  const pjPath = path.join(packageDir, 'package.json');
+  const pj = readJSON(pjPath);
+  let changed = false;
+
+  pj.peerDependencies = pj.peerDependencies || {};
+  pj.devDependencies = pj.devDependencies || {};
+  pj.dependencies = pj.dependencies || {};
+
+  for (const name of names) {
+    if (pj.dependencies[name]) {
+      const current = pj.dependencies[name];
+      const range = typeof current === 'string' ? current : '*';
+      if (!pj.peerDependencies[name]) pj.peerDependencies[name] = range.startsWith('^') ? range : `^${range.replace(/^[^\d]*/, '')}`;
+      delete pj.dependencies[name];
+      changed = true;
+      log(`Moved ${cyan(name)} -> peerDependencies in linked package`);
+    }
+  }
+
+  if (changed) {
+    if (dryRun) {
+      info(`[dry-run] would write updated peerDependencies to ${pjPath}`);
+    } else {
+      writeJSON(pjPath, pj);
+      success('Updated package.json (peerDependencies)');
+    }
+  }
+}
+
+function readPkgName(dir) {
+  const pj = readJSON(path.join(dir, 'package.json'));
+  if (!pj.name) throw new Error('linked package has no "name" in package.json');
+  return pj.name;
+}
+
+function isWorkspaceRoot(cwd = process.cwd()) {
+  try {
+    const pj = readJSON(path.join(cwd, 'package.json'));
+    return Boolean(pj.workspaces);
+  } catch { return false; }
+}
+
+function linkWithPM(pm, pkgDir, pkgName, { dryRun } = {}) {
+  if (dryRun) {
+    info(`[dry-run] would run ${pm} link (in ${pkgDir}) and ${pm} link ${pkgName} (in project)`);
+    return;
+  }
+
+  // create global link
+  run(pm, ['--version'], { stdio: 'pipe' }); // quick validation
+  const original = process.cwd();
+  try {
+    process.chdir(pkgDir);
+    if (pm === 'npm') run('npm', ['link']);
+    else if (pm === 'yarn') run('yarn', ['link']);
+    else if (pm === 'pnpm') run('pnpm', ['link', '--global']);
+    success(`Created global link for ${cyan(pkgName)}`);
+  } finally {
+    process.chdir(original);
+  }
+
+  // link into project
+  if (pm === 'npm') run('npm', ['link', pkgName]);
+  else if (pm === 'yarn') run('yarn', ['link', pkgName]);
+  else if (pm === 'pnpm') {
+    // pnpm supports linking by name if globally linked; otherwise fallback to dir
+    try {
+      run('pnpm', ['link', pkgName]);
+    } catch {
+      warn('pnpm name link failed; attempting direct path link');
+      run('pnpm', ['link', pkgDir]);
+    }
+  }
+  success(`Linked ${cyan(pkgName)} to project`);
+}
+
+// -------- Main --------
 function main() {
   const args = process.argv.slice(2);
-
-  if (args.includes('--help') || args.includes('-h')) {
+  if (args.includes('--help') || args.includes('-h') || args.length === 0) {
     showUsage();
     process.exit(0);
   }
 
-  // Parse package exclusion options
+  // options
   let packagesToRemove = [...DEFAULT_CONFLICTING_PACKAGES];
-
-  const excludeIndex = args.indexOf('--exclude');
-  if (excludeIndex !== -1 && args[excludeIndex + 1]) {
-    // Override default packages with custom list
-    packagesToRemove = parsePackageList(args[excludeIndex + 1]);
+  const exclude = getArg(args, '--exclude');
+  if (exclude) {
+    packagesToRemove = parseList(exclude);
     log(`Using custom exclude list: ${packagesToRemove.join(', ')}`);
   }
-
-  const addExcludeIndex = args.indexOf('--add-exclude');
-  if (addExcludeIndex !== -1 && args[addExcludeIndex + 1]) {
-    // Add additional packages to the default list
-    const additionalPackages = parsePackageList(args[addExcludeIndex + 1]);
-    packagesToRemove = [...new Set([...packagesToRemove, ...additionalPackages])];
-    log(`Adding to exclude list: ${additionalPackages.join(', ')}`);
+  const addExclude = getArg(args, '--add-exclude');
+  if (addExclude) {
+    packagesToRemove = [...new Set([...packagesToRemove, ...parseList(addExclude)])];
+    log(`Adding to exclude list: ${addExclude}`);
   }
 
+  const dryRun = args.includes('--dry-run');
   const cleanOnly = args.includes('--clean-only');
+  const skipPeerCheck = args.includes('--skip-peer-check');
+  const forcedPM = getArg(args, '--manager');
+  const pm = forcedPM || detectPM(process.cwd());
 
-  if (cleanOnly) {
-    removeConflictingPackages(packagesToRemove);
-    success('Package cleanup completed');
-    return;
-  }
+  if (forcedPM) info(`Using forced package manager: ${cyan(pm)}`);
+  else info(`Detected package manager: ${cyan(pm)}`);
 
-  // Find package path (skip option arguments)
-  const packagePath = args.find((arg, index) => {
+  // package path (first non-flag arg that isn't value of a flag)
+  const skipValuesFor = new Set(['--exclude', '--add-exclude', '--manager']);
+  const pkgPathArg = args.find((arg, i) => {
     if (arg.startsWith('--')) return false;
-    // Check if this is a value for an option
-    const prevArg = args[index - 1];
-    if (prevArg && (prevArg === '--exclude' || prevArg === '--add-exclude')) {
-      return false;
-    }
+    const prev = args[i - 1];
+    if (prev && skipValuesFor.has(prev)) return false;
     return true;
   });
 
-  if (!packagePath) {
-    error('Please provide a path to the package you want to link');
+  if (!pkgPathArg && !cleanOnly) {
+    fail('Please provide a path to the package you want to link');
     showUsage();
     process.exit(1);
   }
 
-  const resolvedPath = path.resolve(packagePath);
-
-  if (!fs.existsSync(resolvedPath)) {
-    error(`Package path does not exist: ${resolvedPath}`);
-    process.exit(1);
+  if (isWorkspaceRoot() && !forcedPM && !cleanOnly) {
+    warn('Workspaces detected. Consider using "workspace:" or local file deps instead of linking.');
   }
 
-  if (!fs.existsSync(path.join(resolvedPath, 'package.json'))) {
-    error(`No package.json found in: ${resolvedPath}`);
-    process.exit(1);
+  const projectDir = process.cwd();
+
+  if (cleanOnly) {
+    if (!pkgPathArg) {
+      fail('Provide the linked package path to clean its node_modules');
+      process.exit(1);
+    }
+    const resolved = path.resolve(pkgPathArg);
+    if (!fs.existsSync(resolved)) { fail(`Path does not exist: ${resolved}`); process.exit(1); }
+    if (!fs.existsSync(path.join(resolved, 'package.json'))) { fail(`No package.json in ${resolved}`); process.exit(1); }
+
+    if (!skipPeerCheck) ensurePeerDeps(resolved, PEER_ENFORCE, { dryRun });
+    removeConflictsInDir(resolved, packagesToRemove, { dryRun });
+    success('Cleanup completed');
+    process.exit(0);
   }
 
+  // Full link flow
+  const resolved = path.resolve(pkgPathArg);
+  if (!fs.existsSync(resolved)) { fail(`Path does not exist: ${resolved}`); process.exit(1); }
+  if (!fs.existsSync(path.join(resolved, 'package.json'))) { fail(`No package.json in ${resolved}`); process.exit(1); }
+
+  // 1) enforce peer deps in linked package
+  if (!skipPeerCheck) ensurePeerDeps(resolved, PEER_ENFORCE, { dryRun });
+
+  // 2) remove conflicting packages in the LINKED package node_modules
+  removeConflictsInDir(resolved, packagesToRemove, { dryRun });
+
+  // 3) link using detected pm
+  const pkgName = readPkgName(resolved);
+  linkWithPM(pm, resolved, pkgName, { dryRun });
+
+  // 4) Advice: CRA symlinks
   try {
-    removeConflictingPackages(packagesToRemove);
-    const packageName = linkPackage(resolvedPath);
-    // Remove conflicting packages again after linking (they get reinstalled during npm link)
-    removeConflictingPackages(packagesToRemove);
-    success(`Successfully linked ${packageName}!`);
+    const pj = readJSON(path.join(projectDir, 'package.json'));
+    const deps = { ...pj.dependencies, ...pj.devDependencies };
+    if (deps && deps['react-scripts']) {
+      info('CRA detected. If module resolution errors occur, try:');
+      info('  export NODE_OPTIONS=--preserve-symlinks  (bash/zsh)');
+      info('  setx NODE_OPTIONS "--preserve-symlinks"  (Windows)');
+    }
+  } catch {}
 
-    log('\nNext steps:');
-    log('- Your package is now linked and ready to use');
-    log('- Make changes to your linked package and they will be reflected immediately');
-    log(`- To unlink later, run: npm unlink ${packageName}`);
+  // 5) final clean inside linked package (sometimes link reinstalls)
+  removeConflictsInDir(resolved, packagesToRemove, { dryRun });
 
-  } catch (err) {
-    error('Operation failed');
-    process.exit(1);
-  }
+  success(`Successfully linked ${cyan(pkgName)}!`);
+  log('Next steps: edit your linked package and restart dev server if required.');
+  log(`To unlink: ${pm} unlink ${pkgName}`);
 }
 
 if (require.main === module) {
-  main();
+  try { main(); }
+  catch (e) { fail(e.message || String(e)); process.exit(1); }
 }
 
-module.exports = { removeConflictingPackages, linkPackage };
+module.exports = {
+  detectPM,
+  ensurePeerDeps,
+  removeConflictsInDir
+};
