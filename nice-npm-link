@@ -51,7 +51,7 @@ const DEFAULT_CONFLICTING_PACKAGES = [
  * This ensures the linked package uses the host project's version of these packages.
  *
  * @constant {string[]}
- *
+ */
 const PEER_ENFORCE = ['react', 'react-dom'];
 
 // -------- Utils --------
