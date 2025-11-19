@@ -85,6 +85,7 @@ Usage:
 
 Options:
   --clean-only               Only clean conflicts in the linked package; do not link
+  --unlink                   Restore npm packages to their original versions
   --exclude <a,b,c>          Comma-separated list of packages to remove (overrides defaults)
   --add-exclude <a,b,c>      Comma-separated list of additional packages to remove
   --dry-run                  Show what would happen without making changes
@@ -290,6 +291,32 @@ function isWorkspaceRoot(cwd = process.cwd()) {
 }
 
 /**
+ * Stores the original package version before linking
+ *
+ * @param {string} projectDir - Project directory path
+ * @param {string} pkgName - Package name being linked
+ * @param {string} version - Original version from package.json
+ * @description Saves a backup file to restore original versions during unlink
+ */
+function storeOriginalVersion(projectDir, pkgName, version) {
+  const backupDir = path.join(projectDir, '.nice-npm-link');
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+
+  const backupFile = path.join(backupDir, 'linked-packages.json');
+  let backup = {};
+
+  if (fs.existsSync(backupFile)) {
+    backup = readJSON(backupFile);
+  }
+
+  backup[pkgName] = version;
+  writeJSON(backupFile, backup);
+  info(`Stored original version: ${cyan(pkgName)}@${version}`);
+}
+
+/**
  * Links a local package to the current project using the file: protocol
  *
  * @param {string} pm - Package manager to use ('npm', 'yarn', or 'pnpm')
@@ -318,6 +345,12 @@ function linkWithPM(pm, pkgDir, pkgName, { dryRun } = {}) {
   const packageJson = readJSON(packageJsonPath);
   const relativePath = path.relative(projectDir, pkgDir);
 
+  // Store original version if it exists
+  const originalVersion = packageJson.dependencies?.[pkgName] || packageJson.devDependencies?.[pkgName];
+  if (originalVersion && !originalVersion.startsWith('file:')) {
+    storeOriginalVersion(projectDir, pkgName, originalVersion);
+  }
+
   // Update package.json with file: protocol
   packageJson.dependencies = packageJson.dependencies || {};
   packageJson.dependencies[pkgName] = `file:${relativePath}`;
@@ -328,6 +361,69 @@ function linkWithPM(pm, pkgDir, pkgName, { dryRun } = {}) {
   // Install the file dependency
   run(pm, ['install']);
   success(`Installed ${cyan(pkgName)} via file: protocol`);
+}
+
+/**
+ * Unlinks packages and restores their original npm versions
+ *
+ * @param {string} pm - Package manager to use ('npm', 'yarn', or 'pnpm')
+ * @param {object} [options] - Options object
+ * @param {boolean} [options.dryRun=false] - If true, only logs what would happen without making changes
+ * @description Restores packages to their original npm versions from the backup file
+ */
+function unlinkPackages(pm, { dryRun } = {}) {
+  const projectDir = process.cwd();
+  const packageJsonPath = path.join(projectDir, 'package.json');
+  const backupFile = path.join(projectDir, '.nice-npm-link', 'linked-packages.json');
+
+  if (!fs.existsSync(backupFile)) {
+    fail('No linked packages found. Nothing to unlink.');
+    process.exit(1);
+  }
+
+  const backup = readJSON(backupFile);
+  const packageJson = readJSON(packageJsonPath);
+
+  let unlinkedCount = 0;
+
+  for (const [pkgName, originalVersion] of Object.entries(backup)) {
+    const currentVersion = packageJson.dependencies?.[pkgName] || packageJson.devDependencies?.[pkgName];
+
+    if (currentVersion && currentVersion.startsWith('file:')) {
+      if (dryRun) {
+        info(`[dry-run] would restore ${pkgName} to ${originalVersion}`);
+      } else {
+        // Restore to original version
+        if (packageJson.dependencies?.[pkgName]) {
+          packageJson.dependencies[pkgName] = originalVersion;
+        } else if (packageJson.devDependencies?.[pkgName]) {
+          packageJson.devDependencies[pkgName] = originalVersion;
+        }
+        success(`Restored ${cyan(pkgName)} to ${originalVersion}`);
+        unlinkedCount++;
+      }
+    }
+  }
+
+  if (!dryRun && unlinkedCount > 0) {
+    writeJSON(packageJsonPath, packageJson);
+    success('Updated package.json');
+
+    log('Installing packages from npm...');
+    run(pm, ['install']);
+    success('Installed packages from npm');
+
+    // Clean up backup file
+    fs.rmSync(backupFile);
+    const backupDir = path.join(projectDir, '.nice-npm-link');
+    if (fs.existsSync(backupDir) && fs.readdirSync(backupDir).length === 0) {
+      fs.rmdirSync(backupDir);
+    }
+
+    success(`Unlinked ${unlinkedCount} package(s)`);
+  } else if (!dryRun) {
+    info('No linked packages to unlink');
+  }
 }
 
 // -------- Main --------
@@ -367,12 +463,19 @@ function main() {
 
   const dryRun = args.includes('--dry-run');
   const cleanOnly = args.includes('--clean-only');
+  const unlink = args.includes('--unlink');
   const skipPeerCheck = args.includes('--skip-peer-check');
   const forcedPM = getArg(args, '--manager');
   const pm = forcedPM || detectPM(process.cwd());
 
   if (forcedPM) info(`Using forced package manager: ${cyan(pm)}`);
   else info(`Detected package manager: ${cyan(pm)}`);
+
+  // Handle unlink mode
+  if (unlink) {
+    unlinkPackages(pm, { dryRun });
+    process.exit(0);
+  }
 
   // Extract package path: Find the first positional argument that isn't a flag or flag value
   // This allows flexible ordering like: nnl ../lib --exclude react,react-dom
@@ -462,7 +565,7 @@ function main() {
     log('• Restart your dev server if needed');
   }
 
-  log(`• To unlink: change package.json back to npm version`);
+  log(`• To unlink: run ${cyan('npx nice-npm-link --unlink')}`);
 }
 
 if (require.main === module) {
