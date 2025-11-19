@@ -24,6 +24,16 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 // -------- Config --------
+/**
+ * Default list of packages that commonly cause conflicts when linking React component libraries.
+ * These packages are removed from the linked package's node_modules to prevent duplicate instances.
+ *
+ * @constant {string[]}
+ * @description Includes:
+ *   - React core packages (react, react-dom, scheduler, react-is)
+ *   - Styling libraries that depend on React context (styled-components, @emotion/*)
+ *   - TypeScript definitions that can conflict (@types/react, @types/react-dom)
+ */
 const DEFAULT_CONFLICTING_PACKAGES = [
   'react',
   'react-dom',
@@ -36,21 +46,36 @@ const DEFAULT_CONFLICTING_PACKAGES = [
   '@types/react-dom'
 ];
 
+/**
+ * Packages that should be automatically moved to peerDependencies in the linked package.
+ * This ensures the linked package uses the host project's version of these packages.
+ *
+ * @constant {string[]}
+ *
 const PEER_ENFORCE = ['react', 'react-dom'];
 
 // -------- Utils --------
+/**
+ * Terminal color formatters using ANSI escape codes
+ */
 const cyan = s => `\x1b[36m${s}\x1b[0m`;
 const gray = s => `\x1b[90m${s}\x1b[0m`;
 const green = s => `\x1b[32m${s}\x1b[0m`;
 const red = s => `\x1b[31m${s}\x1b[0m`;
 const yellow = s => `\x1b[33m${s}\x1b[0m`;
 
+/**
+ * Logging utilities with consistent formatting and icons
+ */
 function log(msg) { console.log(`📦 ${msg}`); }
 function info(msg) { console.log(gray(`ℹ︎ ${msg}`)); }
 function success(msg) { console.log(green(`✅ ${msg}`)); }
 function warn(msg) { console.log(yellow(`⚠️  ${msg}`)); }
 function fail(msg) { console.error(red(`❌ ${msg}`)); }
 
+/**
+ * Displays the usage help text with all available options
+ */
 function showUsage() {
   console.log(`
 ${cyan('nice-npm-link (enhanced)')}
@@ -76,21 +101,53 @@ Notes:
 }
 
 // -------- Arg parsing --------
+/**
+ * Parses a comma-separated string into an array of trimmed, non-empty values
+ *
+ * @param {string} s - Comma-separated string (e.g., "react,react-dom,styled-components")
+ * @returns {string[]} Array of trimmed package names
+ * @example
+ *   parseList("react, react-dom, ") // => ["react", "react-dom"]
+ */
 function parseList(s) {
   return s.split(',').map(x => x.trim()).filter(Boolean);
 }
 
+/**
+ * Gets the value of a command-line argument by name
+ *
+ * @param {string[]} args - Command-line arguments array
+ * @param {string} name - Flag name to search for (e.g., "--exclude")
+ * @returns {string|null} Value following the flag, or null if not found
+ * @example
+ *   getArg(["--exclude", "react"], "--exclude") // => "react"
+ */
 function getArg(args, name) {
   const i = args.indexOf(name);
   return i !== -1 ? args[i + 1] : null;
 }
 
+/**
+ * Auto-detects the package manager used in the project
+ *
+ * @param {string} [cwd=process.cwd()] - Directory to check for lockfiles
+ * @returns {'pnpm'|'yarn'|'npm'} Detected package manager (defaults to 'npm')
+ * @description Checks for lockfiles in this order: pnpm-lock.yaml, yarn.lock, then defaults to npm
+ */
 function detectPM(cwd = process.cwd()) {
   if (fs.existsSync(path.join(cwd, 'pnpm-lock.yaml'))) return 'pnpm';
   if (fs.existsSync(path.join(cwd, 'yarn.lock'))) return 'yarn';
   return 'npm';
 }
 
+/**
+ * Executes a package manager command synchronously
+ *
+ * @param {string} pm - Package manager command ('npm', 'yarn', or 'pnpm')
+ * @param {string[]} argv - Command arguments
+ * @param {object} [opts={}] - Additional spawn options
+ * @throws {Error} If the command fails or returns a non-zero exit code
+ */
 function run(pm, argv, opts = {}) {
   const cmd = pm;
   const result = spawnSync(cmd, argv, { stdio: 'inherit', shell: process.platform === 'win32', ...opts });
@@ -98,15 +155,38 @@ function run(pm, argv, opts = {}) {
   if (result.status !== 0) throw new Error(`${cmd} ${argv.join(' ')} exited with code ${result.status}`);
 }
 
+/**
+ * Reads and parses a JSON file synchronously
+ *
+ * @param {string} file - Path to JSON file
+ * @returns {object} Parsed JSON object
+ * @throws {Error} If file cannot be read or parsed
+ */
 function readJSON(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/**
+ * Writes an object to a JSON file with 2-space indentation
+ *
+ * @param {string} file - Path to output JSON file
+ * @param {object} obj - Object to serialize and write
+ */
 function writeJSON(file, obj) {
   fs.writeFileSync(file, JSON.stringify(obj, null, 2));
 }
 
 // -------- Core helpers --------
+/**
+ * Removes conflicting packages from a directory's node_modules
+ *
+ * @param {string} dir - Directory containing node_modules to clean
+ * @param {string[]} packages - Array of package names to remove
+ * @param {object} [options] - Options object
+ * @param {boolean} [options.dryRun=false] - If true, only logs what would be removed without actually removing
+ * @description This function removes packages from the LINKED package's node_modules to prevent
+ *              duplicate instances of React, styling libraries, etc. that can cause runtime errors.
+ */
 function removeConflictsInDir(dir, packages, { dryRun } = {}) {
   const nm = path.join(dir, 'node_modules');
   if (!fs.existsSync(nm)) {
@@ -133,6 +213,16 @@ function removeConflictsInDir(dir, packages, { dryRun } = {}) {
   }
 }
 
+/**
+ * Ensures specified packages are listed as peerDependencies (not dependencies) in a package
+ *
+ * @param {string} packageDir - Path to the package directory
+ * @param {string[]} names - Package names to move to peerDependencies (e.g., ['react', 'react-dom'])
+ * @param {object} [options] - Options object
+ * @param {boolean} [options.dryRun=false] - If true, only logs changes without modifying package.json
+ * @description Moves packages from dependencies to peerDependencies and adds a prepare script if needed.
+ *              This ensures the linked library uses the host project's version of these packages.
+ */
 function ensurePeerDeps(packageDir, names, { dryRun } = {}) {
   const pjPath = path.join(packageDir, 'package.json');
   const pj = readJSON(pjPath);
@@ -141,11 +231,13 @@ function ensurePeerDeps(packageDir, names, { dryRun } = {}) {
   pj.peerDependencies = pj.peerDependencies || {};
   pj.devDependencies = pj.devDependencies || {};
   pj.dependencies = pj.dependencies || {};
+  pj.scripts = pj.scripts || {};
 
   for (const name of names) {
     if (pj.dependencies[name]) {
       const current = pj.dependencies[name];
       const range = typeof current === 'string' ? current : '*';
+      // Convert to caret range if not already, ensuring compatibility
       if (!pj.peerDependencies[name]) pj.peerDependencies[name] = range.startsWith('^') ? range : `^${range.replace(/^[^\d]*/, '')}`;
       delete pj.dependencies[name];
       changed = true;
@@ -153,22 +245,43 @@ function ensurePeerDeps(packageDir, names, { dryRun } = {}) {
     }
   }
 
+  // Ensure prepare script exists for auto-build on install
+  if (!pj.scripts.prepare && pj.scripts.build) {
+    pj.scripts.prepare = 'npm run build';
+    changed = true;
+    log(`Added prepare script for auto-build on install`);
+  }
+
   if (changed) {
     if (dryRun) {
-      info(`[dry-run] would write updated peerDependencies to ${pjPath}`);
+      info(`[dry-run] would write updated package.json to ${pjPath}`);
     } else {
       writeJSON(pjPath, pj);
-      success('Updated package.json (peerDependencies)');
+      success('Updated package.json (peerDependencies & scripts)');
     }
   }
 }
 
+/**
+ * Reads the package name from a directory's package.json
+ *
+ * @param {string} dir - Directory containing package.json
+ * @returns {string} Package name from package.json
+ * @throws {Error} If package.json has no "name" field
+ */
 function readPkgName(dir) {
   const pj = readJSON(path.join(dir, 'package.json'));
   if (!pj.name) throw new Error('linked package has no "name" in package.json');
   return pj.name;
 }
 
+/**
+ * Checks if the current directory is a workspace root (monorepo)
+ *
+ * @param {string} [cwd=process.cwd()] - Directory to check
+ * @returns {boolean} True if the directory has a "workspaces" field in package.json
+ * @description Used to warn users that workspaces may not need manual linking
+ */
 function isWorkspaceRoot(cwd = process.cwd()) {
   try {
     const pj = readJSON(path.join(cwd, 'package.json'));
@@ -176,41 +289,59 @@ function isWorkspaceRoot(cwd = process.cwd()) {
   } catch { return false; }
 }
 
+/**
+ * Links a local package to the current project using the file: protocol
+ *
+ * @param {string} pm - Package manager to use ('npm', 'yarn', or 'pnpm')
+ * @param {string} pkgDir - Absolute path to the package directory to link
+ * @param {string} pkgName - Name of the package being linked
+ * @param {object} [options] - Options object
+ * @param {boolean} [options.dryRun=false] - If true, only logs what would happen without making changes
+ * @description Uses the file: protocol in package.json instead of npm link, which is more reliable
+ *              and works better with modern package managers and bundlers.
+ * @throws {Error} If package.json is not found in the current directory
+ */
 function linkWithPM(pm, pkgDir, pkgName, { dryRun } = {}) {
   if (dryRun) {
-    info(`[dry-run] would run ${pm} link (in ${pkgDir}) and ${pm} link ${pkgName} (in project)`);
+    info(`[dry-run] would use file: protocol to link ${pkgName}`);
     return;
   }
 
-  // create global link
-  run(pm, ['--version'], { stdio: 'pipe' }); // quick validation
-  const original = process.cwd();
-  try {
-    process.chdir(pkgDir);
-    if (pm === 'npm') run('npm', ['link']);
-    else if (pm === 'yarn') run('yarn', ['link']);
-    else if (pm === 'pnpm') run('pnpm', ['link', '--global']);
-    success(`Created global link for ${cyan(pkgName)}`);
-  } finally {
-    process.chdir(original);
+  // Use file: protocol instead of npm link (more reliable)
+  const projectDir = process.cwd();
+  const packageJsonPath = path.join(projectDir, 'package.json');
+
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error('package.json not found in current directory');
   }
 
-  // link into project
-  if (pm === 'npm') run('npm', ['link', pkgName]);
-  else if (pm === 'yarn') run('yarn', ['link', pkgName]);
-  else if (pm === 'pnpm') {
-    // pnpm supports linking by name if globally linked; otherwise fallback to dir
-    try {
-      run('pnpm', ['link', pkgName]);
-    } catch {
-      warn('pnpm name link failed; attempting direct path link');
-      run('pnpm', ['link', pkgDir]);
-    }
-  }
-  success(`Linked ${cyan(pkgName)} to project`);
+  const packageJson = readJSON(packageJsonPath);
+  const relativePath = path.relative(projectDir, pkgDir);
+
+  // Update package.json with file: protocol
+  packageJson.dependencies = packageJson.dependencies || {};
+  packageJson.dependencies[pkgName] = `file:${relativePath}`;
+
+  writeJSON(packageJsonPath, packageJson);
+  success(`Updated package.json with file: protocol for ${cyan(pkgName)}`);
+
+  // Install the file dependency
+  run(pm, ['install']);
+  success(`Installed ${cyan(pkgName)} via file: protocol`);
 }
 
 // -------- Main --------
+/**
+ * Main entry point for the nice-npm-link CLI tool
+ *
+ * @description Orchestrates the entire linking workflow:
+ *              1. Parses command-line arguments
+ *              2. Detects or forces package manager (npm/yarn/pnpm)
+ *              3. Moves React packages to peerDependencies in linked package
+ *              4. Removes conflicting packages from linked package's node_modules
+ *              5. Links the package using file: protocol
+ *              6. Provides next steps and helpful advice
+ */
 function main() {
   const args = process.argv.slice(2);
   if (args.includes('--help') || args.includes('-h') || args.length === 0) {
@@ -218,15 +349,18 @@ function main() {
     process.exit(0);
   }
 
-  // options
+  // Parse options: Build the list of packages to remove from linked package
   let packagesToRemove = [...DEFAULT_CONFLICTING_PACKAGES];
   const exclude = getArg(args, '--exclude');
   if (exclude) {
+    // --exclude completely overrides the default list
     packagesToRemove = parseList(exclude);
     log(`Using custom exclude list: ${packagesToRemove.join(', ')}`);
   }
   const addExclude = getArg(args, '--add-exclude');
   if (addExclude) {
+    // --add-exclude adds to the list (either default or custom from --exclude)
+    // Use Set to deduplicate in case user specifies same package twice
     packagesToRemove = [...new Set([...packagesToRemove, ...parseList(addExclude)])];
     log(`Adding to exclude list: ${addExclude}`);
   }
@@ -240,7 +374,8 @@ function main() {
   if (forcedPM) info(`Using forced package manager: ${cyan(pm)}`);
   else info(`Detected package manager: ${cyan(pm)}`);
 
-  // package path (first non-flag arg that isn't value of a flag)
+  // Extract package path: Find the first positional argument that isn't a flag or flag value
+  // This allows flexible ordering like: nnl ../lib --exclude react,react-dom
   const skipValuesFor = new Set(['--exclude', '--add-exclude', '--manager']);
   const pkgPathArg = args.find((arg, i) => {
     if (arg.startsWith('--')) return false;
@@ -292,9 +427,10 @@ function main() {
   linkWithPM(pm, resolved, pkgName, { dryRun });
 
   // 4) Advice: CRA symlinks
+  let deps;
   try {
     const pj = readJSON(path.join(projectDir, 'package.json'));
-    const deps = { ...pj.dependencies, ...pj.devDependencies };
+    deps = { ...pj.dependencies, ...pj.devDependencies };
     if (deps && deps['react-scripts']) {
       info('CRA detected. If module resolution errors occur, try:');
       info('  export NODE_OPTIONS=--preserve-symlinks  (bash/zsh)');
@@ -306,8 +442,27 @@ function main() {
   removeConflictsInDir(resolved, packagesToRemove, { dryRun });
 
   success(`Successfully linked ${cyan(pkgName)}!`);
-  log('Next steps: edit your linked package and restart dev server if required.');
-  log(`To unlink: ${pm} unlink ${pkgName}`);
+
+  // Check if the linked package has a dev/watch script
+  const linkedPkgJson = readJSON(path.join(resolved, 'package.json'));
+  const hasWatchScript = linkedPkgJson.scripts && (linkedPkgJson.scripts.dev || linkedPkgJson.scripts['build:watch']);
+
+  log('\nNext steps:');
+  if (hasWatchScript) {
+    const watchCmd = linkedPkgJson.scripts.dev ? 'npm run dev' : 'npm run build:watch';
+    log(`• Run ${cyan(watchCmd)} in ${gray(path.basename(resolved))} for live rebuilding`);
+    log(`• Edit files in ${gray(path.basename(resolved))} → auto-rebuild → changes appear in your app`);
+  } else {
+    log(`• Run ${cyan('npm run build')} in ${gray(path.basename(resolved))} after making changes`);
+  }
+
+  if (deps && deps['react-scripts']) {
+    log(`• Restart your dev server with: ${cyan('NODE_OPTIONS=--preserve-symlinks npm start')}`);
+  } else {
+    log('• Restart your dev server if needed');
+  }
+
+  log(`• To unlink: change package.json back to npm version`);
 }
 
 if (require.main === module) {
