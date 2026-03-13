@@ -1,0 +1,266 @@
+/**
+ * @fileoverview Command-line argument parsing utilities
+ *
+ * Provides functions for parsing CLI arguments without external dependencies.
+ * Handles flag detection, value extraction, and comma-separated list parsing.
+ *
+ * @module args
+ */
+
+const { cyan } = require('./logger');
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Argument Parsing
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Parses a comma-separated string into an array of trimmed, non-empty values
+ *
+ * Handles various input formats gracefully:
+ * - Extra whitespace is trimmed
+ * - Empty segments are filtered out
+ * - Works with or without spaces after commas
+ *
+ * @param {string} s - Comma-separated string (e.g., "react,react-dom,styled-components")
+ * @returns {string[]} Array of trimmed package names
+ *
+ * @example
+ * parseList("react, react-dom, styled-components")
+ * // => ["react", "react-dom", "styled-components"]
+ *
+ * @example
+ * parseList("react,react-dom,")
+ * // => ["react", "react-dom"] (trailing comma handled)
+ *
+ * @example
+ * parseList("  react  ,  react-dom  ")
+ * // => ["react", "react-dom"] (whitespace trimmed)
+ */
+function parseList(s) {
+  return s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+/**
+ * Gets the value of a command-line argument by flag name
+ *
+ * Searches for the flag in the args array and returns the next element
+ * as its value. Returns null if the flag is not found.
+ *
+ * @param {string[]} args - Command-line arguments array
+ * @param {string} name - Flag name to search for (e.g., "--exclude")
+ * @returns {string|null} Value following the flag, or null if not found
+ *
+ * @example
+ * getArg(["--exclude", "react", "--dry-run"], "--exclude")
+ * // => "react"
+ *
+ * @example
+ * getArg(["--dry-run"], "--exclude")
+ * // => null (flag not found)
+ *
+ * @example
+ * getArg(["--manager", "pnpm"], "--manager")
+ * // => "pnpm"
+ */
+function getArg(args, name) {
+  const index = args.indexOf(name);
+  return index !== -1 ? args[index + 1] : null;
+}
+
+/**
+ * Checks if a flag is present in the arguments array
+ *
+ * @param {string[]} args - Command-line arguments array
+ * @param {string} name - Flag name to check for
+ * @returns {boolean} True if flag is present
+ *
+ * @example
+ * hasFlag(["--dry-run", "../my-lib"], "--dry-run")
+ * // => true
+ */
+function hasFlag(args, name) {
+  return args.includes(name);
+}
+
+/**
+ * Finds the first positional argument (non-flag argument)
+ *
+ * Skips over flags and their values to find the package path.
+ * This allows flexible argument ordering.
+ *
+ * @param {string[]} args - Command-line arguments array
+ * @param {Set<string>} [flagsWithValues] - Set of flag names that take values
+ * @returns {string|undefined} First positional argument, or undefined if none
+ *
+ * @example
+ * // Standard usage
+ * findPositionalArg(["../my-lib", "--dry-run"])
+ * // => "../my-lib"
+ *
+ * @example
+ * // Flags before path
+ * const flagsWithValues = new Set(["--exclude", "--add-exclude", "--manager"]);
+ * findPositionalArg(["--exclude", "react", "../my-lib"], flagsWithValues)
+ * // => "../my-lib"
+ */
+function findPositionalArg(args, flagsWithValues = new Set()) {
+  return args.find((arg, i) => {
+    // Skip flags
+    if (arg.startsWith('--')) return false;
+
+    // Skip values that belong to flags
+    const prevArg = args[i - 1];
+    if (prevArg && flagsWithValues.has(prevArg)) return false;
+
+    return true;
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Help/Usage Display
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Displays the usage help text with all available options
+ *
+ * Shows:
+ * - Command syntax and examples
+ * - Available flags with descriptions
+ * - Notes about usage patterns
+ *
+ * @returns {void}
+ */
+function showUsage() {
+  console.log(`
+${cyan('nice-npm-link')}
+
+Usage:
+  nnl <package-path> [options]
+  nnl --clean-all [options]
+  nnl --watch [options]
+
+Options:
+  --clean-all                ${cyan('Recursively')} clean ALL linked packages in current project
+  --clean-only <path>        Only clean conflicts in the specified linked package
+  --unlink                   Restore npm packages to their original versions
+  --dev                      ${cyan('Run')} dev scripts in all linked packages (rebuilds on change)
+  --watch                    ${cyan('Watch')} linked package dist folders and trigger reload on change
+  --watch-dir <dir>          Directory to watch in each package (default: 'dist')
+  --exclude <a,b,c>          Comma-separated list of packages to remove (overrides defaults)
+  --add-exclude <a,b,c>      Comma-separated list of additional packages to remove
+  --dry-run                  Show what would happen without making changes
+  --manager <npm|yarn|pnpm>  Force a package manager (auto-detected by default)
+  --skip-peer-check          Do not auto-move react/react-dom to peerDependencies
+  --help, -h                 Show help
+
+Examples:
+  nnl --clean-all            Clean all file: linked packages recursively
+  nnl --clean-only ../my-lib Clean only the specified package
+  nnl ../my-lib              Link and clean a package
+  nnl --dry-run --clean-all  Preview what would be cleaned
+  nnl --dev                  Run dev scripts in all linked packages
+  nnl --dev --watch          Rebuild packages AND trigger reload on changes
+  nnl --watch                Watch dist folders (use with external rebuilder)
+  nnl --watch --watch-dir src Watch src/ instead of dist/
+
+Notes:
+  ${cyan('--clean-all')} finds all file: dependencies recursively and cleans each one.
+  This is the recommended way to resolve "multiple copies of React" errors
+  when working with linked Nice ecosystem packages.
+
+  ${cyan('--dev')} runs 'npm run dev' in all linked packages concurrently,
+  rebuilding them when source files change.
+
+  ${cyan('--watch')} watches linked package dist folders and touches a trigger
+  file when changes are detected, causing webpack/CRA to recompile.
+
+  ${cyan('--dev --watch')} combines both: rebuilds packages AND triggers reload.
+  This is the recommended setup for webpack/CRA projects.
+
+  Conflicts are removed from the ${cyan('LINKED PACKAGE')} node_modules, not your app.
+  Ensure your component library lists React as peerDependency.
+
+  For CRA projects, you may need: export NODE_OPTIONS=--preserve-symlinks
+`);
+}
+
+/**
+ * Parsed command-line options
+ * @typedef {object} ParsedOptions
+ * @property {string[]} packagesToRemove - Packages to remove from node_modules
+ * @property {boolean} dryRun - Preview mode, don't make changes
+ * @property {boolean} cleanAll - Clean all linked packages recursively
+ * @property {boolean} cleanOnly - Only clean, don't link
+ * @property {boolean} unlink - Restore original versions
+ * @property {boolean} dev - Run dev scripts in all linked packages
+ * @property {boolean} watch - Watch linked packages for changes
+ * @property {string} watchDir - Directory to watch in each package
+ * @property {boolean} skipPeerCheck - Skip peer dependency enforcement
+ * @property {string} pm - Package manager to use
+ * @property {string|undefined} pkgPath - Path to package to link/clean
+ * @property {boolean} showHelp - Whether to show help
+ */
+
+/**
+ * Parses command-line arguments into a structured options object
+ *
+ * @param {string[]} args - Raw command-line arguments
+ * @param {object} defaults - Default configuration
+ * @param {string[]} defaults.conflictingPackages - Default packages to remove
+ * @param {string} defaults.pm - Default package manager
+ * @returns {ParsedOptions} Parsed options
+ */
+function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
+  // Check for help flag first
+  if (args.includes('--help') || args.includes('-h') || args.length === 0) {
+    return { showHelp: true };
+  }
+
+  // Build the list of packages to remove
+  let packagesToRemove = [...conflictingPackages];
+  const exclude = getArg(args, '--exclude');
+  if (exclude) {
+    packagesToRemove = parseList(exclude);
+  }
+  const addExclude = getArg(args, '--add-exclude');
+  if (addExclude) {
+    const additional = parseList(addExclude);
+    packagesToRemove = [...new Set([...packagesToRemove, ...additional])];
+  }
+
+  // Parse flags
+  const forcedPM = getArg(args, '--manager');
+  const watchDir = getArg(args, '--watch-dir');
+
+  // Find positional argument (package path)
+  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir']);
+  const pkgPath = findPositionalArg(args, flagsWithValues);
+
+  return {
+    packagesToRemove,
+    dryRun: hasFlag(args, '--dry-run'),
+    cleanAll: hasFlag(args, '--clean-all'),
+    cleanOnly: hasFlag(args, '--clean-only'),
+    unlink: hasFlag(args, '--unlink'),
+    dev: hasFlag(args, '--dev'),
+    watch: hasFlag(args, '--watch'),
+    watchDir: watchDir || 'dist',
+    skipPeerCheck: hasFlag(args, '--skip-peer-check'),
+    pm: forcedPM || defaultPM,
+    forcedPM: Boolean(forcedPM),
+    pkgPath,
+    showHelp: false,
+  };
+}
+
+module.exports = {
+  parseList,
+  getArg,
+  hasFlag,
+  findPositionalArg,
+  showUsage,
+  parseArgs,
+};
