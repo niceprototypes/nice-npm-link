@@ -141,6 +141,7 @@ Usage:
   nnl <package-path> [options]
   nnl --clean-all [options]
   nnl --watch [options]
+  nnl --publish [packages...]
 
 Options:
   --clean-all                ${cyan('Recursively')} clean ALL linked packages in current project
@@ -154,6 +155,8 @@ Options:
   --dry-run                  Show what would happen without making changes
   --manager <npm|yarn|pnpm>  Force a package manager (auto-detected by default)
   --skip-peer-check          Do not auto-move react/react-dom to peerDependencies
+  --publish [pkg1,pkg2,...]   Publish changed packages to npm (all if no packages specified)
+  --dry-publish              Preview what would be published without making changes
   --help, -h                 Show help
 
 Examples:
@@ -161,6 +164,8 @@ Examples:
   nnl --clean-only ../my-lib Clean only the specified package
   nnl ../my-lib              Link and clean a package
   nnl --dry-run --clean-all  Preview what would be cleaned
+  nnl --publish              Publish all changed packages to npm
+  nnl --publish nice-styles,nice-react-styles  Publish specific packages
   nnl --dev                  Run dev scripts in all linked packages
   nnl --dev --watch          Rebuild packages AND trigger reload on changes
   nnl --watch                Watch dist folders (use with external rebuilder)
@@ -236,12 +241,15 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
   const watchDir = getArg(args, '--watch-dir');
 
   // Find positional argument (package path)
-  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir']);
+  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish']);
   const pkgPath = findPositionalArg(args, flagsWithValues);
 
   return {
     packagesToRemove,
     dryRun: hasFlag(args, '--dry-run'),
+    publish: hasFlag(args, '--publish'),
+    publishPackages: getArg(args, '--publish'),
+    dryPublish: hasFlag(args, '--dry-publish'),
     cleanAll: hasFlag(args, '--clean-all'),
     cleanOnly: hasFlag(args, '--clean-only'),
     unlink: hasFlag(args, '--unlink'),

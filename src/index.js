@@ -23,6 +23,7 @@ const { removeConflictsInDir, cleanAllLinkedPackages } = require('./cleaner');
 const { linkPackage, unlinkPackages } = require('./linker');
 const { startWatching, TRIGGER_FILE_NAME } = require('./watcher');
 const { startDevRunner } = require('./dev-runner');
+const { publish } = require('./publisher');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // CLI Orchestration
@@ -125,6 +126,23 @@ function main() {
   if (options.unlink) {
     unlinkPackages(options.pm, { dryRun: options.dryRun });
     process.exit(0);
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Handle --publish mode
+  // ────────────────────────────────────────────────────────────────────────────
+  if (options.publish || options.dryPublish) {
+    const packages = options.publishPackages
+      ? options.publishPackages.split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+
+    publish({ packages, dryRun: options.dryPublish || options.dryRun })
+      .then(() => process.exit(0))
+      .catch((e) => {
+        fail(e.message);
+        process.exit(1);
+      });
+    return;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
