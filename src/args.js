@@ -155,7 +155,11 @@ Options:
   --dry-run                  Show what would happen without making changes
   --manager <npm|yarn|pnpm>  Force a package manager (auto-detected by default)
   --skip-peer-check          Do not auto-move react/react-dom to peerDependencies
+  --create <name>            Create a new Nice ecosystem package
+  --type <component>         Package type for --create (default: component)
   --publish [pkg1,pkg2,...]   Publish changed packages to npm (all if no packages specified)
+  --no-npm                   Bump, build, commit, push — but skip npm publish
+  --otp-window <seconds>     Seconds before re-prompting for OTP (default: 30)
   --dry-publish              Preview what would be published without making changes
   --help, -h                 Show help
 
@@ -241,14 +245,18 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
   const watchDir = getArg(args, '--watch-dir');
 
   // Find positional argument (package path)
-  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish']);
+  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--otp-window', '--create', '--type']);
   const pkgPath = findPositionalArg(args, flagsWithValues);
 
   return {
     packagesToRemove,
     dryRun: hasFlag(args, '--dry-run'),
+    create: getArg(args, '--create'),
+    createType: getArg(args, '--type') || 'component',
     publish: hasFlag(args, '--publish'),
     publishPackages: getArg(args, '--publish'),
+    noNpm: hasFlag(args, '--no-npm'),
+    otpWindow: parseInt(getArg(args, '--otp-window') || '30', 10),
     dryPublish: hasFlag(args, '--dry-publish'),
     cleanAll: hasFlag(args, '--clean-all'),
     cleanOnly: hasFlag(args, '--clean-only'),

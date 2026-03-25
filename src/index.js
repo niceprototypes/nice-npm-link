@@ -1,12 +1,16 @@
 /**
- * @fileoverview Main entry point for nice-npm-link
+ * @fileoverview CLI entry point for nice-npm-link
  *
- * Orchestrates the CLI workflow by combining all modules:
- * - Argument parsing
- * - Package manager detection
- * - Package discovery
- * - Conflict cleaning
- * - Linking/unlinking
+ * Routes command-line flags to the appropriate operation:
+ *
+ *   --create     Scaffold a new Nice ecosystem package
+ *   --publish    Publish packages to npm with dependency cascade
+ *   --unlink     Restore packages to their original npm versions
+ *   --dev        Run dev scripts in all linked packages concurrently
+ *   --watch      Watch linked package dist folders for changes
+ *   --clean-all  Remove conflicting singletons from all linked packages
+ *   --clean-only Remove conflicts from a single linked package
+ *   (default)    Link a package via file: protocol
  *
  * @module nice-npm-link
  */
@@ -24,21 +28,23 @@ const { linkPackage, unlinkPackages } = require('./linker');
 const { startWatching, TRIGGER_FILE_NAME } = require('./watcher');
 const { startDevRunner } = require('./dev-runner');
 const { publish } = require('./publisher');
+const { create } = require('./creator');
 
 // ──────────────────────────────────────────────────────────────────────────────
-// CLI Orchestration
+// Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
 /**
- * Displays CRA-specific advice if react-scripts is detected
+ * Detects Create React App by checking for react-scripts in dependencies.
+ * Displays NODE_OPTIONS advice if found.
  *
- * @param {string} projectDir - Project directory
+ * @param {string} projectDir - Project root directory
+ * @returns {boolean} True if CRA was detected
  * @private
  */
 function showCRAAdvice(projectDir) {
   try {
-    const pkgJsonPath = path.join(projectDir, 'package.json');
-    const pkg = readJSON(pkgJsonPath);
+    const pkg = readJSON(path.join(projectDir, 'package.json'));
     const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
     if (deps['react-scripts']) {
@@ -48,31 +54,33 @@ function showCRAAdvice(projectDir) {
       return true;
     }
   } catch {
-    // Ignore errors
+    // package.json missing or unreadable — not a CRA project
   }
   return false;
 }
 
 /**
- * Shows next steps after successful linking
+ * Displays recommended next steps after a successful link operation.
+ * Adapts suggestions based on available scripts and project type.
  *
- * @param {string} resolvedPkgPath - Absolute path to linked package
- * @param {boolean} isCRA - Whether the project uses Create React App
+ * @param {string} resolvedPkgPath - Absolute path to the linked package
+ * @param {boolean} isCRA - Whether the consuming project uses CRA
  * @private
  */
 function showNextSteps(resolvedPkgPath, isCRA) {
   const pkg = readJSON(path.join(resolvedPkgPath, 'package.json'));
   const hasDevScript = pkg.scripts?.dev;
   const hasWatchScript = pkg.scripts?.['build:watch'];
+  const pkgName = path.basename(resolvedPkgPath);
 
   log('\nNext steps:');
 
   if (hasDevScript || hasWatchScript) {
     const watchCmd = hasDevScript ? 'npm run dev' : 'npm run build:watch';
-    log(`Run ${cyan(watchCmd)} in ${gray(path.basename(resolvedPkgPath))} for live rebuilding`);
-    log(`Edit files in ${gray(path.basename(resolvedPkgPath))} → auto-rebuild → changes appear in your app`);
+    log(`Run ${cyan(watchCmd)} in ${gray(pkgName)} for live rebuilding`);
+    log(`Edit files in ${gray(pkgName)} → auto-rebuild → changes appear in your app`);
   } else {
-    log(`Run ${cyan('npm run build')} in ${gray(path.basename(resolvedPkgPath))} after making changes`);
+    log(`Run ${cyan('npm run build')} in ${gray(pkgName)} after making changes`);
   }
 
   if (isCRA) {
@@ -84,59 +92,182 @@ function showNextSteps(resolvedPkgPath, isCRA) {
   log(`To unlink: run ${cyan('npx nice-npm-link --unlink')}`);
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Command Handlers
+// ──────────────────────────────────────────────────────────────────────────────
+
 /**
- * Main entry point for the nice-npm-link CLI tool
+ * Starts dev runner and/or watcher processes.
+ * Sets up SIGINT/SIGTERM handlers for graceful shutdown.
+ * This function does not return — it keeps the process alive.
  *
- * Orchestrates the entire workflow:
- * 1. Parses command-line arguments
- * 2. Detects or uses specified package manager
- * 3. Routes to appropriate operation (link, unlink, clean-all, clean-only)
- * 4. Provides feedback and next steps
+ * @param {string} projectDir - Project root directory
+ * @param {object} options - Parsed CLI options
+ * @private
+ */
+function handleDevWatch(projectDir, options) {
+  let devController = null;
+  let watchController = null;
+
+  if (options.dev) {
+    devController = startDevRunner(projectDir, { verbose: true });
+  }
+
+  if (options.watch) {
+    watchController = startWatching(projectDir, {
+      watchDir: options.watchDir,
+      verbose: true,
+    });
+  }
+
+  // Graceful shutdown on Ctrl+C or kill signal
+  const shutdown = () => {
+    if (watchController) watchController.stop();
+    if (devController) devController.stop();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+}
+
+/**
+ * Cleans conflicts from a single linked package.
+ *
+ * @param {object} options - Parsed CLI options
+ * @private
+ */
+function handleCleanOnly(options) {
+  if (!options.pkgPath) {
+    fail('Provide the linked package path to clean its node_modules');
+    process.exit(1);
+  }
+
+  const validation = validatePackageDir(options.pkgPath);
+  if (!validation.valid) {
+    fail(validation.error);
+    process.exit(1);
+  }
+
+  const resolvedPath = path.resolve(options.pkgPath);
+
+  if (!options.skipPeerCheck) {
+    ensurePeerDeps(resolvedPath, PEER_ENFORCE, { dryRun: options.dryRun });
+  }
+
+  removeConflictsInDir(resolvedPath, options.packagesToRemove, {
+    dryRun: options.dryRun,
+  });
+
+  success('Cleanup completed');
+}
+
+/**
+ * Links a package via file: protocol and cleans conflicts.
+ *
+ * @param {string} projectDir - Project root directory
+ * @param {object} options - Parsed CLI options
+ * @private
+ */
+function handleLink(projectDir, options) {
+  if (!options.pkgPath) {
+    fail('Please provide a path to the package you want to link');
+    showUsage();
+    process.exit(1);
+  }
+
+  const validation = validatePackageDir(options.pkgPath);
+  if (!validation.valid) {
+    fail(validation.error);
+    process.exit(1);
+  }
+
+  const resolvedPath = path.resolve(options.pkgPath);
+
+  if (isWorkspaceRoot(projectDir) && !options.forcedPM) {
+    warn('Workspaces detected. Consider using "workspace:" or local file deps instead of linking.');
+  }
+
+  if (!options.skipPeerCheck) {
+    ensurePeerDeps(resolvedPath, PEER_ENFORCE, { dryRun: options.dryRun });
+  }
+
+  // Clean → link → detect CRA → clean again
+  // The second clean pass is needed because npm install during linking
+  // may reinstall the same conflicting singletons we just removed
+  removeConflictsInDir(resolvedPath, options.packagesToRemove, { dryRun: options.dryRun });
+
+  const pkgName = readPkgName(resolvedPath);
+  linkPackage(options.pm, resolvedPath, pkgName, { dryRun: options.dryRun });
+
+  const isCRA = showCRAAdvice(projectDir);
+
+  removeConflictsInDir(resolvedPath, options.packagesToRemove, { dryRun: options.dryRun });
+
+  success(`Successfully linked ${cyan(pkgName)}!`);
+  showNextSteps(resolvedPath, isCRA);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Main
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * CLI entry point. Parses arguments and routes to the appropriate handler.
  *
  * @returns {void}
  */
 function main() {
   const projectDir = process.cwd();
 
-  // Detect package manager first (needed for arg parsing defaults)
+  // Detect package manager from lockfile (pnpm > yarn > npm)
   const detectedPM = detectPM(projectDir);
 
-  // Parse arguments
+  // Parse CLI arguments into a structured options object
   const options = parseArgs(process.argv.slice(2), {
     conflictingPackages: DEFAULT_CONFLICTING_PACKAGES,
     pm: detectedPM,
   });
 
-  // Handle help
   if (options.showHelp) {
     showUsage();
     process.exit(0);
   }
 
-  // Log package manager info
   if (options.forcedPM) {
     info(`Using forced package manager: ${cyan(options.pm)}`);
   } else {
     info(`Detected package manager: ${cyan(options.pm)}`);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Handle --unlink mode
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Route to handler ──────────────────────────────────────────────────────
+  // Mutually exclusive — each branch exits or returns after completion.
+
   if (options.unlink) {
     unlinkPackages(options.pm, { dryRun: options.dryRun });
     process.exit(0);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Handle --publish mode
-  // ────────────────────────────────────────────────────────────────────────────
+  if (options.create) {
+    create({ name: options.create, type: options.createType, dryRun: options.dryRun });
+    process.exit(0);
+  }
+
+  // Async — uses return instead of process.exit to allow promise chain
   if (options.publish || options.dryPublish) {
-    const packages = options.publishPackages
-      ? options.publishPackages.split(',').map((s) => s.trim()).filter(Boolean)
+    // publishPackages may contain a flag value (e.g. "--dry-run") when
+    // --publish is used without package names — filter those out
+    const rawPackages = options.publishPackages
+    const packages = rawPackages && !rawPackages.startsWith("--")
+      ? rawPackages.split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
 
-    publish({ packages, dryRun: options.dryPublish || options.dryRun })
+    publish({
+      packages,
+      doPublish: !options.noNpm,
+      dryRun: options.dryPublish || options.dryRun,
+      otpWindow: options.otpWindow,
+    })
       .then(() => process.exit(0))
       .catch((e) => {
         fail(e.message);
@@ -145,44 +276,12 @@ function main() {
     return;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Handle --dev and/or --watch mode
-  // ────────────────────────────────────────────────────────────────────────────
+  // Long-running — keeps the process alive for Ctrl+C shutdown
   if (options.dev || options.watch) {
-    let devController = null;
-    let watchController = null;
-
-    // Start dev runner if --dev flag is set
-    if (options.dev) {
-      devController = startDevRunner(projectDir, { verbose: true });
-    }
-
-    // Start watcher if --watch flag is set
-    if (options.watch) {
-      watchController = startWatching(projectDir, {
-        watchDir: options.watchDir,
-        verbose: true,
-      });
-    }
-
-    // Handle graceful shutdown
-    const shutdown = () => {
-      console.log('');
-      if (watchController) watchController.stop();
-      if (devController) devController.stop();
-      process.exit(0);
-    };
-
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
-
-    // Keep the process running
+    handleDevWatch(projectDir, options);
     return;
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Handle --clean-all mode
-  // ────────────────────────────────────────────────────────────────────────────
   if (options.cleanAll) {
     cleanAllLinkedPackages(projectDir, options.packagesToRemove, {
       dryRun: options.dryRun,
@@ -192,85 +291,12 @@ function main() {
     process.exit(0);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Handle --clean-only mode
-  // ────────────────────────────────────────────────────────────────────────────
   if (options.cleanOnly) {
-    if (!options.pkgPath) {
-      fail('Provide the linked package path to clean its node_modules');
-      process.exit(1);
-    }
-
-    const validation = validatePackageDir(options.pkgPath);
-    if (!validation.valid) {
-      fail(validation.error);
-      process.exit(1);
-    }
-
-    const resolvedPath = path.resolve(options.pkgPath);
-
-    if (!options.skipPeerCheck) {
-      ensurePeerDeps(resolvedPath, PEER_ENFORCE, { dryRun: options.dryRun });
-    }
-
-    removeConflictsInDir(resolvedPath, options.packagesToRemove, {
-      dryRun: options.dryRun,
-    });
-
-    success('Cleanup completed');
+    handleCleanOnly(options);
     process.exit(0);
   }
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // Full link flow
-  // ────────────────────────────────────────────────────────────────────────────
-
-  // Require package path for linking
-  if (!options.pkgPath) {
-    fail('Please provide a path to the package you want to link');
-    showUsage();
-    process.exit(1);
-  }
-
-  // Validate package directory
-  const validation = validatePackageDir(options.pkgPath);
-  if (!validation.valid) {
-    fail(validation.error);
-    process.exit(1);
-  }
-
-  const resolvedPath = path.resolve(options.pkgPath);
-
-  // Warn about workspaces
-  if (isWorkspaceRoot(projectDir) && !options.forcedPM) {
-    warn('Workspaces detected. Consider using "workspace:" or local file deps instead of linking.');
-  }
-
-  // 1. Enforce peer dependencies
-  if (!options.skipPeerCheck) {
-    ensurePeerDeps(resolvedPath, PEER_ENFORCE, { dryRun: options.dryRun });
-  }
-
-  // 2. Remove conflicts from linked package
-  removeConflictsInDir(resolvedPath, options.packagesToRemove, {
-    dryRun: options.dryRun,
-  });
-
-  // 3. Link the package
-  const pkgName = readPkgName(resolvedPath);
-  linkPackage(options.pm, resolvedPath, pkgName, { dryRun: options.dryRun });
-
-  // 4. Check for CRA and show advice
-  const isCRA = showCRAAdvice(projectDir);
-
-  // 5. Clean again (npm install may have reinstalled conflicts)
-  removeConflictsInDir(resolvedPath, options.packagesToRemove, {
-    dryRun: options.dryRun,
-  });
-
-  // 6. Success message and next steps
-  success(`Successfully linked ${cyan(pkgName)}!`);
-  showNextSteps(resolvedPath, isCRA);
+  handleLink(projectDir, options);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -278,10 +304,9 @@ function main() {
 // ──────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
-  // Main CLI
   main,
 
-  // Re-export commonly used functions for programmatic use
+  // Re-exports for programmatic use
   detectPM,
   findAllLinkedPackages,
   cleanAllLinkedPackages,
