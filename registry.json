@@ -1,0 +1,33 @@
+{
+  "basePath": "~/Code",
+  "tiers": [
+    [
+      { "name": "nice-styles", "type": "foundation", "sourceAliasable": false },
+      { "name": "nice-icons", "type": "foundation", "sourceAliasable": false },
+      { "name": "nice-npm-link", "type": "cli", "sourceAliasable": false },
+      { "name": "nice-vite-watcher", "type": "plugin", "sourceAliasable": false }
+    ],
+    [
+      { "name": "nice-react-styles", "type": "react-component", "sourceAliasable": true }
+    ],
+    [
+      { "name": "nice-react-flex", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-typography", "type": "react-component", "sourceAliasable": true }
+    ],
+    [
+      { "name": "nice-react-icon", "type": "react-component", "sourceAliasable": false },
+      { "name": "nice-react-tile", "type": "react-component", "sourceAliasable": true }
+    ],
+    [
+      { "name": "nice-react-button", "type": "react-component", "sourceAliasable": true }
+    ],
+    [
+      { "name": "nice-react-scroll", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-slider", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-device-detector", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-lightbox", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-image", "type": "react-component", "sourceAliasable": true },
+      { "name": "nice-react-input", "type": "react-component", "sourceAliasable": true }
+    ]
+  ]
+}
