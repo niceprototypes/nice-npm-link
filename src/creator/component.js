@@ -7,6 +7,7 @@
  * Directory structure created:
  *   {packageName}/
  *   ├── package.json
+ *   ├── package.exports.json
  *   ├── tsconfig.json
  *   ├── rollup.config.js
  *   └── src/
@@ -42,10 +43,11 @@ function buildFileTree(componentName) {
   return [
       // Root config files
       ["package.json", "packageJson"],
+      ["package.exports.json", "packageExportsJson"],
       ["tsconfig.json", "tsconfigJson"],
       ["rollup.config.js", "rollupConfig"],
-    
-      // Package entry
+
+      // Package entry — initial content matches nice-generate-exports output
       ["src/index.ts", "srcIndex"],
     
       // Component files
