@@ -266,7 +266,6 @@ function main() {
       packages,
       doPublish: !options.noNpm,
       dryRun: options.dryPublish || options.dryRun,
-      otpWindow: options.otpWindow,
     })
       .then(() => process.exit(0))
       .catch((e) => {

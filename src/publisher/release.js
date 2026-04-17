@@ -1,30 +1,31 @@
 /**
  * @fileoverview Publish phase
  *
- * Publishes built packages to npm in rapid succession with OTP management.
- * This is the fast phase — packages are already built and deps swapped,
- * so each publish only runs npm publish with --ignore-scripts.
+ * Publishes built packages to npm in rapid succession with reactive OTP management.
+ * Packages are already built and deps swapped — each publish only runs
+ * npm publish with --ignore-scripts.
+ *
+ * OTP codes are reused until npm rejects them. On rejection, the user is
+ * re-prompted up to MAX_OTP_RETRIES times per package. If retries are
+ * exhausted, the remaining packages are skipped (the auth state is broken).
  *
  * @module publisher/release
  */
 
 const { log, info, success, warn, fail, cyan } = require("../logger")
 const { run, pkgDir } = require("./helpers")
-const { createOtpManager } = require("./otp")
+const { createOtpManager, isOtpError } = require("./otp")
+
+const MAX_OTP_RETRIES = 3
 
 /**
- * Publishes packages to npm with OTP management.
- *
- * Prompts for an OTP code once, then publishes all packages in rapid
- * succession. If the OTP expires mid-run, the user is re-prompted.
- * Failed publishes get one retry with a fresh OTP before being marked failed.
+ * Publishes packages to npm with reactive OTP management.
  *
  * @param {object[]} publishable - Built packages ready to publish
- * @param {number} otpWindow - Seconds before re-prompting for OTP
  * @param {boolean} doPublish - Whether to actually publish to npm
  * @returns {Promise<{ published: string[], failed: string[] }>}
  */
-async function releasePackages(publishable, otpWindow, doPublish) {
+async function releasePackages(publishable, doPublish) {
   const published = []
   const failed = []
 
@@ -38,36 +39,49 @@ async function releasePackages(publishable, otpWindow, doPublish) {
 
   log(`\nPublishing ${publishable.length} package(s)...\n`)
 
-  const otp = createOtpManager(otpWindow)
+  const otp = createOtpManager()
 
-  for (const p of publishable) {
+  for (let i = 0; i < publishable.length; i++) {
+    const p = publishable[i]
     const dir = pkgDir(p.name)
-    const code = await otp.get()
+    let attempts = 0
+    let didPublish = false
 
-    try {
-      // --ignore-scripts skips rebuild — packages are already built in build phase
-      run(`npm publish --otp=${code} --ignore-scripts --access public`, { cwd: dir })
-      published.push(p.name)
-      success(`Published ${p.name}@${p.newVersion}`)
-    } catch (e) {
-      const errMsg = e.message || ""
+    while (attempts <= MAX_OTP_RETRIES && !didPublish) {
+      // Force a new prompt on retries (attempts > 0)
+      const code = await otp.get(attempts > 0)
 
-      // OTP expired or rate limited — invalidate and retry with fresh code
-      if (errMsg.includes("429") || errMsg.includes("EOTP") || errMsg.includes("one-time password")) {
-        otp.invalidate()
-        warn(`OTP expired for ${p.name}, requesting new code...`)
-        const retryCode = await otp.get()
-        try {
-          run(`npm publish --otp=${retryCode} --ignore-scripts --access public`, { cwd: dir })
-          published.push(p.name)
-          success(`Published ${p.name}@${p.newVersion}`)
-        } catch (retryErr) {
-          fail(`Publish failed for ${p.name}: ${retryErr.message}`)
+      try {
+        // --ignore-scripts skips rebuild — packages are already built in build phase
+        run(`npm publish --otp=${code} --ignore-scripts --access public`, { cwd: dir })
+        published.push(p.name)
+        success(`Published ${p.name}@${p.newVersion}`)
+        didPublish = true
+      } catch (e) {
+        const errMsg = e.message || ""
+
+        if (isOtpError(errMsg)) {
+          attempts++
+          otp.invalidate()
+
+          if (attempts <= MAX_OTP_RETRIES) {
+            warn(`OTP rejected for ${p.name} (attempt ${attempts}/${MAX_OTP_RETRIES}), requesting new code...`)
+          } else {
+            // Auth state is broken — skip remaining packages
+            fail(`OTP failed ${MAX_OTP_RETRIES} times for ${p.name}. Stopping publish phase.`)
+            failed.push(p.name)
+            const remaining = publishable.slice(i + 1)
+            for (const r of remaining) {
+              warn(`Skipped ${r.name} (publish phase halted)`)
+              failed.push(r.name)
+            }
+            return { published, failed }
+          }
+        } else {
+          fail(`Publish failed for ${p.name}: ${errMsg}`)
           failed.push(p.name)
+          break
         }
-      } else {
-        fail(`Publish failed for ${p.name}: ${errMsg}`)
-        failed.push(p.name)
       }
     }
   }

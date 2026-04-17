@@ -1,46 +1,58 @@
 /**
- * @fileoverview OTP lifecycle management with configurable expiry
+ * @fileoverview Reactive OTP management
+ *
+ * Holds an OTP code and reuses it until npm rejects it.
+ * No timer — re-prompts are driven by actual publish failures.
+ *
  * @module publisher/otp
  */
 
 const { prompt } = require('./helpers');
 
 /**
- * Manages OTP lifecycle with configurable expiry window.
- * Prompts for a new code when the current one is likely expired.
+ * Manages OTP lifecycle reactively.
+ * Prompts once, reuses the code until invalidated by a publish rejection.
  *
- * @param {number} windowSeconds - Seconds before considering OTP expired
- * @returns {{ get: () => Promise<string>, invalidate: () => void }}
+ * @returns {{ get: (forceNew?: boolean) => Promise<string>, invalidate: () => void }}
  */
-function createOtpManager(windowSeconds = 30) {
+function createOtpManager() {
   let code = null;
-  let timestamp = 0;
 
   return {
     /**
-     * Returns a valid OTP, prompting if expired or not yet set.
+     * Returns the current OTP code, prompting if not set or if forceNew is true.
+     *
+     * @param {boolean} [forceNew=false] - Force a new prompt (after rejection)
      * @returns {Promise<string>}
      */
-    async get() {
-      const elapsed = (Date.now() - timestamp) / 1000;
-      if (!code || elapsed >= windowSeconds) {
-        const label = code ? 'OTP expired, new code' : 'OTP code';
+    async get(forceNew = false) {
+      if (!code || forceNew) {
+        const label = forceNew ? 'OTP expired, new code' : 'OTP code';
         code = await prompt(`  ${label}: `);
-        timestamp = Date.now();
       }
       return code;
     },
 
     /**
-     * Forces re-prompt on next get() (e.g., after a 429 rate limit).
+     * Clears the stored code so the next get() will prompt.
      */
     invalidate() {
       code = null;
-      timestamp = 0;
     },
   };
 }
 
+/**
+ * Checks whether an npm error message indicates an OTP rejection.
+ *
+ * @param {string} msg - Error message from npm publish
+ * @returns {boolean}
+ */
+function isOtpError(msg) {
+  return msg.includes('429') || msg.includes('EOTP') || msg.includes('one-time password');
+}
+
 module.exports = {
   createOtpManager,
+  isOtpError,
 };

@@ -73,12 +73,18 @@ function scanPackages(requestedPackages) {
 
       const localVersion = getLocalVersion(name)
       const npmVersion = getNpmVersion(name)
-      const { commitsSincePublish, dirty } = getChangeStatus(name, npmVersion)
+      const { commitsSincePublish, dirty, hasTag } = getChangeStatus(name, npmVersion)
 
-      // Package qualifies if it has commits since publish, uncommitted work, or is unpublished
-      const hasChanges = commitsSincePublish > 0 || dirty > 0
+      // Package qualifies if:
+      // - local version differs from npm (already bumped but not published)
+      // - never published to npm
+      // - has commits since a known publish tag (real changes, not a missing-tag false positive)
+      // - has uncommitted work
+      const versionAhead = npmVersion && localVersion !== npmVersion
+      const confirmedChanges = hasTag && commitsSincePublish > 0
+      const hasUncommitted = dirty > 0
 
-      if (hasChanges || !npmVersion) {
+      if (versionAhead || !npmVersion || confirmedChanges || hasUncommitted) {
         candidates.push({
           name,
           localVersion,

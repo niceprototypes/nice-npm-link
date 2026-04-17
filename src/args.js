@@ -159,7 +159,6 @@ Options:
   --type <component>         Package type for --create (default: component)
   --publish [pkg1,pkg2,...]   Publish changed packages to npm (all if no packages specified)
   --no-npm                   Bump, build, commit, push — but skip npm publish
-  --otp-window <seconds>     Seconds before re-prompting for OTP (default: 30)
   --dry-publish              Preview what would be published without making changes
   --help, -h                 Show help
 
@@ -245,7 +244,7 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
   const watchDir = getArg(args, '--watch-dir');
 
   // Find positional argument (package path)
-  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--otp-window', '--create', '--type']);
+  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--create', '--type']);
   const pkgPath = findPositionalArg(args, flagsWithValues);
 
   return {
@@ -256,7 +255,6 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
     publish: hasFlag(args, '--publish'),
     publishPackages: getArg(args, '--publish'),
     noNpm: hasFlag(args, '--no-npm'),
-    otpWindow: parseInt(getArg(args, '--otp-window') || '30', 10),
     dryPublish: hasFlag(args, '--dry-publish'),
     cleanAll: hasFlag(args, '--clean-all'),
     cleanOnly: hasFlag(args, '--clean-only'),

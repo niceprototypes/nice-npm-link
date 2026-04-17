@@ -35,10 +35,9 @@ const { restoreAllDeps, commitAndTag, printSummary } = require("./finalize")
  * @param {string[]} [options.packages] - Packages with actual changes
  * @param {boolean} [options.doPublish=true] - Whether to publish to npm
  * @param {boolean} [options.dryRun=false] - Preview mode
- * @param {number} [options.otpWindow=30] - Seconds before re-prompting for OTP
  * @returns {Promise<void>}
  */
-async function publish({ packages: requestedPackages, doPublish = true, dryRun = false, otpWindow = 30 } = {}) {
+async function publish({ packages: requestedPackages, doPublish = true, dryRun = false } = {}) {
   // ── 0. Verify npm auth before doing any work ─────────────────────────────
   if (doPublish && !dryRun) {
     if (!verifyNpmAuth()) return
@@ -125,7 +124,7 @@ async function publish({ packages: requestedPackages, doPublish = true, dryRun =
   }
 
   // ── 8. Publish to npm ─────────────────────────────────────────────────────
-  const { published, failed } = await releasePackages(publishable, otpWindow, doPublish)
+  const { published, failed } = await releasePackages(publishable, doPublish)
   const allFailed = [...buildFailed, ...failed]
 
   // ── 9. Finalize — restore deps, commit, tag, push, summarize ─────────────
