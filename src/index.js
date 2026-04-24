@@ -29,6 +29,7 @@ const { startWatching, TRIGGER_FILE_NAME } = require('./watcher');
 const { startDevRunner } = require('./dev-runner');
 const { publish } = require('./publisher');
 const { create } = require('./creator');
+const { appendBumpIntent, bumpFileRelativePath } = require('./bump');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -251,6 +252,22 @@ function main() {
   if (options.create) {
     create({ name: options.create, type: options.createType, dryRun: options.dryRun });
     process.exit(0);
+  }
+
+  if (options.bumpLevel) {
+    if (!options.bumpSummary) {
+      fail('--bump <level> requires a summary, e.g. nnl --bump major "Rename breakpoint identifiers"');
+      process.exit(1);
+    }
+    try {
+      appendBumpIntent(projectDir, options.bumpLevel, options.bumpSummary);
+      success(`Recorded ${cyan(options.bumpLevel)} bump: ${gray(options.bumpSummary)}`);
+      info(`Commit ${cyan(bumpFileRelativePath())} alongside your change.`);
+      process.exit(0);
+    } catch (e) {
+      fail(e.message);
+      process.exit(1);
+    }
   }
 
   // Async — uses return instead of process.exit to allow promise chain

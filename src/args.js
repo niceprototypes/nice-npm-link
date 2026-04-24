@@ -160,6 +160,9 @@ Options:
   --publish [pkg1,pkg2,...]   Publish changed packages to npm (all if no packages specified)
   --no-npm                   Bump, build, commit, push — but skip npm publish
   --dry-publish              Preview what would be published without making changes
+  --bump <level> <summary>   Record a bump intent entry in ./.nice/bump.md
+                             level: major | minor | patch
+                             Example: nnl --bump major "Rename breakpoint identifiers"
   --help, -h                 Show help
 
 Examples:
@@ -244,8 +247,14 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
   const watchDir = getArg(args, '--watch-dir');
 
   // Find positional argument (package path)
-  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--create', '--type']);
+  const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--create', '--type', '--bump']);
   const pkgPath = findPositionalArg(args, flagsWithValues);
+
+  // --bump {level} "{summary}" — append an entry to .nice/bump.md in the
+  // current package. The value of --bump is the level; the summary is the
+  // first positional after the flag.
+  const bumpLevel = getArg(args, '--bump');
+  const bumpSummary = bumpLevel ? findBumpSummary(args) : null;
 
   return {
     packagesToRemove,
@@ -266,8 +275,30 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
     pm: forcedPM || defaultPM,
     forcedPM: Boolean(forcedPM),
     pkgPath,
+    bumpLevel,
+    bumpSummary,
     showHelp: false,
   };
+}
+
+/**
+ * Collects the summary for `--bump <level> <summary...>`. Everything after
+ * `--bump <level>` that is not a flag becomes the summary, joined by spaces.
+ *
+ * @param {string[]} args - Raw CLI arguments
+ * @returns {string|null} The joined summary, or null if none provided
+ */
+function findBumpSummary(args) {
+  const idx = args.indexOf('--bump');
+  if (idx === -1) return null;
+  // Skip --bump and its level value; collect positionals until next flag
+  const parts = [];
+  for (let i = idx + 2; i < args.length; i++) {
+    if (args[i].startsWith('--')) break;
+    parts.push(args[i]);
+  }
+  const joined = parts.join(' ').trim();
+  return joined || null;
 }
 
 module.exports = {

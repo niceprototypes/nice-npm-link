@@ -10,6 +10,7 @@
 const { log, info, success, warn, fail } = require("../logger")
 const { run, pkgDir, getLocalVersion } = require("./helpers")
 const { restoreFileDeps } = require("./deps")
+const { clearBumpIntent } = require("../bump")
 
 /**
  * Restores file: deps for all packages that had deps swapped.
@@ -40,6 +41,9 @@ function commitAndTag(published) {
     const dir = pkgDir(name)
     const version = getLocalVersion(name)
     const tag = `v${version}`
+
+    // Clear pending bump intent so the cleared file lands in the publish commit
+    try { clearBumpIntent(dir) } catch { /* no-op if the file never existed */ }
 
     try {
       run(`cd "${dir}" && git add -A && git commit -m "${version}" 2>/dev/null`)
