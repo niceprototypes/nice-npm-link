@@ -1,39 +1,33 @@
 /**
  * @fileoverview Version bump prompting
  *
- * Two-stage flow driven by recorded bump intent in `.nice/bump.md`:
+ * Per-package walkthrough driven by recorded bump intent in `.nice/bump.md`.
+ * For each iteration, the full candidate table is re-rendered with the
+ * current package highlighted, and a 5-option menu is shown:
  *
- *   Stage 1 — recommendation digest:
- *     Shows every changed package with its recommended bump level
- *     (derived from the max level across `.nice/bump.md` entries).
- *     Prompt: [A]ccept all / [P]er-package / [V]iew entries / [C]ancel.
+ *   [1] Accept current      Apply the recommended level, advance
+ *   [2] Edit current        Prompt for a specific level, advance
+ *   [3] Accept remaining    Apply recommendations to this and every
+ *                           remaining pending package, finish
+ *   [4] View logs           Print .nice/bump.md entries for current,
+ *                           re-prompt (does not advance)
+ *   [5] Cancel              Abort the publish
  *
- *   Stage 2 — only if the user picks [P]er-package:
- *     For each changed candidate, prompt with the recommended default:
- *     [y] accept recommendation / [p] patch / [m] minor / [M] major /
- *     [s] skip / [v] view entries.
- *
- * Packages with no `.nice/bump.md` entries fall back to a patch default
- * and are surfaced in the digest with "(no intent recorded)".
- *
- * Dependents (auto-patched) are never prompted for.
+ * Accepted rows replace their entry-count tag with a green ✓ + derived
+ * version. Dependents (auto-patched) are never part of this walk.
  *
  * @module publisher/prompts
  */
 
-const { info, warn, cyan, gray } = require("../logger")
+const { info, warn, cyan, gray, green, yellow } = require("../logger")
 const { prompt, pkgDir } = require("./helpers")
 const { calcVersion } = require("./versioning")
 const { readBumpIntent } = require("../bump")
 
-/**
- * Reads bump intent for every changed candidate and attaches:
- *   - `intentLevel`: "major" | "minor" | "patch" | null
- *   - `intentEntries`: raw entry list for [V]iew
- *
- * @param {object[]} candidates
- * @returns {object[]}
- */
+// ──────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────────────────────
+
 function enrichWithIntent(candidates) {
   return candidates.map((c) => {
     const { entries, level } = readBumpIntent(pkgDir(c.name))
@@ -41,142 +35,150 @@ function enrichWithIntent(candidates) {
   })
 }
 
-/**
- * Resolves a bump type into a new version string. "as-is" keeps the current
- * version (for new unpublished packages).
- *
- * @param {object} candidate
- * @param {string} bumpType
- * @returns {object}
- */
-function resolveVersion(candidate, bumpType) {
-  if (bumpType === "as-is") {
-    return { ...candidate, newVersion: candidate.localVersion }
-  }
-  const newVersion = calcVersion(candidate.localVersion, bumpType)
-  return { ...candidate, newVersion, bumpType }
+function recommendedLevel(c) {
+  if (c.isNew) return "as-is"
+  return c.intentLevel || "patch"
 }
 
-/**
- * Prints the Stage 1 recommendation digest.
- *
- * @param {object[]} enriched
- */
-function printDigest(enriched) {
-  info("Recommended bumps (from .nice/bump.md):")
-  for (const c of enriched) {
-    if (c.isNew) {
-      info(`  ${cyan(c.name)} — new package (${c.localVersion})`)
-      continue
+function derivedVersion(c, bumpType) {
+  if (bumpType === "as-is") return c.localVersion
+  return calcVersion(c.localVersion, bumpType)
+}
+
+function renderTable(enriched, decisions, currentIdx) {
+  info("Publish candidates:")
+  for (let i = 0; i < enriched.length; i++) {
+    const c = enriched[i]
+    const d = decisions.get(c.name)
+    const isCurrent = i === currentIdx
+
+    const prefix = isCurrent ? yellow("▶ ") : "  "
+    const name = (isCurrent ? yellow : cyan)(c.name.padEnd(24))
+
+    const chosen = d && d.status === "accepted" ? d.bumpType : recommendedLevel(c)
+    const next = derivedVersion(c, chosen)
+    const arrow = c.isNew ? `${c.localVersion} (new)` : `${c.localVersion} → ${next}`
+    const levelTag = c.isNew ? "" : `(${chosen})`
+
+    let trailing
+    if (d && d.status === "accepted") {
+      trailing = green(`✓ ${next}`)
+    } else {
+      const count = c.intentEntries.length
+      trailing = c.intentLevel
+        ? gray(`${count} ${count === 1 ? "entry" : "entries"}`)
+        : ""
     }
-    const recLevel = c.intentLevel || "patch"
-    const nextVersion = calcVersion(c.localVersion, recLevel)
-    const count = c.intentEntries.length
-    const tag = c.intentLevel
-      ? `${count} ${count === 1 ? "entry" : "entries"}`
-      : ""
-    info(`  ${cyan(c.name.padEnd(24))} ${c.localVersion} → ${nextVersion}   (${recLevel})   ${gray(tag)}`)
+
+    info(`${prefix}${name} ${arrow}   ${levelTag}   ${trailing}`)
   }
 }
 
 /**
- * Prints every intent entry, grouped by package.
+ * Inner prompt for [2] Edit current — asks for a specific level.
  *
- * @param {object[]} enriched
+ * @param {object} c - Current candidate
+ * @returns {Promise<string|null>} bumpType or null to skip
  */
-function printEntries(enriched) {
-  for (const c of enriched) {
-    if (!c.intentEntries.length) continue
-    info(`  ${cyan(c.name)}:`)
-    for (const e of c.intentEntries) {
-      info(`    ${e.level}: ${e.summary}`)
-    }
-  }
-}
-
-/**
- * Per-package prompt when the user picks [P]er-package.
- *
- * @param {object} c - Enriched candidate
- * @returns {Promise<{bumpType: string}|null>} null to skip
- */
-async function promptPerPackage(c) {
+async function promptEditLevel(c) {
   if (c.isNew) {
-    const answer = await prompt(`  ${cyan(c.name)} ${gray(`(${c.localVersion})`)} — new package, [Y/n]: `)
+    const answer = (await prompt(`  ${cyan(c.name)} — new package, [Y] accept / [n] skip: `)).trim()
     if (answer === "n") return null
-    return { bumpType: "as-is" }
+    return "as-is"
   }
-
-  const rec = c.intentLevel || "patch"
-  const answer = await prompt(
-    `  ${cyan(c.name)} ${gray(`(${c.localVersion})`)} — rec ${cyan(rec)}: [y] accept / [p]atch / [m]inor / [M]ajor / [s]kip / [v]iew: `
-  )
-
-  if (answer === "v" || answer === "view") {
-    for (const e of c.intentEntries) info(`    ${e.level}: ${e.summary}`)
-    return promptPerPackage(c)
-  }
-
-  if (answer === "y" || answer === "") return { bumpType: rec }
-  if (answer === "M" || answer === "major") return { bumpType: "major" }
-
+  const rec = recommendedLevel(c)
+  const answer = (await prompt(`  ${cyan(c.name)} — [p]atch / [m]inor / [M]ajor / [s]kip (rec: ${cyan(rec)}): `)).trim()
+  if (answer === "M" || answer === "major") return "major"
   switch (answer.toLowerCase()) {
-    case "p": case "patch": return { bumpType: "patch" }
-    case "m": case "minor": return { bumpType: "minor" }
+    case "": return rec
+    case "p": case "patch": return "patch"
+    case "m": case "minor": return "minor"
     case "s": case "skip": return null
     default:
-      warn(`Unknown option "${answer}", skipping ${c.name}`)
+      warn(`Unknown option "${answer}"`)
       return null
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Main
+// ──────────────────────────────────────────────────────────────────────────────
+
 /**
- * Entry point — runs Stage 1 and, if needed, Stage 2.
+ * Walks the user through each changed candidate with a 5-option menu.
  *
  * @param {object[]} changedCandidates - Packages the user explicitly changed
- * @param {object[]} dependentCandidates - Packages added by graph resolution
+ * @param {object[]} dependentCandidates - Packages added by graph resolution (auto-patched)
  * @returns {Promise<object[]|null>} Packages to publish with newVersion, or null if aborted
  */
 async function promptVersionBumps(changedCandidates, dependentCandidates) {
   const enriched = enrichWithIntent(changedCandidates)
+  const decisions = new Map() // name → { status: "pending" | "accepted", bumpType }
 
-  // Stage 1: digest and top-level prompt
-  printDigest(enriched)
-  const action = (await prompt("[A]ccept all / [P]er-package / [V]iew entries / [C]ancel: ")).trim()
+  for (const c of enriched) decisions.set(c.name, { status: "pending" })
 
-  if (action === "" || action === "C" || action.toLowerCase() === "c") {
-    info("Aborted.")
-    return null
-  }
+  let currentIdx = 0
 
-  if (action === "V" || action.toLowerCase() === "v") {
-    printEntries(enriched)
-    return promptVersionBumps(changedCandidates, dependentCandidates)
-  }
+  while (currentIdx < enriched.length) {
+    const current = enriched[currentIdx]
+    renderTable(enriched, decisions, currentIdx)
 
-  const toPublish = []
+    const action = (await prompt(
+      "[1] Accept current  [2] Edit current  [3] Accept remaining  [4] View logs  [5] Cancel: "
+    )).trim()
 
-  if (action === "A" || action.toLowerCase() === "a") {
-    // Accept all: new packages as-is, existing packages use recommended level
-    for (const c of enriched) {
-      const bumpType = c.isNew ? "as-is" : (c.intentLevel || "patch")
-      toPublish.push(resolveVersion(c, bumpType))
+    if (action === "5" || action.toLowerCase() === "c" || action.toLowerCase() === "cancel") {
+      info("Aborted.")
+      return null
     }
-  } else if (action === "P" || action.toLowerCase() === "p") {
-    // Per-package
-    for (const c of enriched) {
-      const parsed = await promptPerPackage(c)
-      if (!parsed) continue
-      toPublish.push(resolveVersion(c, parsed.bumpType))
+
+    if (action === "4" || action.toLowerCase() === "v") {
+      if (current.intentEntries.length > 0) {
+        for (const e of current.intentEntries) info(`    ${e.level}: ${e.summary}`)
+      }
+      continue
     }
-  } else {
+
+    if (action === "3" || action.toLowerCase() === "r") {
+      for (let i = currentIdx; i < enriched.length; i++) {
+        const c = enriched[i]
+        if (decisions.get(c.name).status === "accepted") continue
+        decisions.set(c.name, { status: "accepted", bumpType: recommendedLevel(c) })
+      }
+      currentIdx = enriched.length
+      renderTable(enriched, decisions, -1)
+      break
+    }
+
+    if (action === "2" || action.toLowerCase() === "e") {
+      const bumpType = await promptEditLevel(current)
+      if (bumpType !== null) {
+        decisions.set(current.name, { status: "accepted", bumpType })
+      }
+      currentIdx++
+      continue
+    }
+
+    if (action === "1" || action === "" || action.toLowerCase() === "a") {
+      decisions.set(current.name, { status: "accepted", bumpType: recommendedLevel(current) })
+      currentIdx++
+      continue
+    }
+
     warn(`Unknown option "${action}"`)
-    return null
   }
 
-  // Dependents are always auto-patched — their only change is a rebuilt dep
+  // Build the toPublish list from accepted decisions
+  const toPublish = []
+  for (const c of enriched) {
+    const d = decisions.get(c.name)
+    if (!d || d.status !== "accepted") continue
+    toPublish.push({ ...c, newVersion: derivedVersion(c, d.bumpType), bumpType: d.bumpType })
+  }
+
+  // Dependents always auto-patched
   for (const c of dependentCandidates) {
-    toPublish.push(resolveVersion(c, "patch"))
+    toPublish.push({ ...c, newVersion: calcVersion(c.localVersion, "patch"), bumpType: "patch" })
   }
 
   return toPublish
