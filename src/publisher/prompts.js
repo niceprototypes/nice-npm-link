@@ -20,7 +20,7 @@
  */
 
 const { info, warn, cyan, gray, green, yellow } = require("../logger")
-const { prompt, pkgDir } = require("./helpers")
+const { prompt, promptKey, pkgDir } = require("./helpers")
 const { calcVersion } = require("./versioning")
 const { readBumpIntent } = require("../bump")
 
@@ -82,18 +82,24 @@ function renderTable(enriched, decisions, currentIdx) {
  */
 async function promptEditLevel(c) {
   if (c.isNew) {
-    const answer = (await prompt(`  ${cyan(c.name)} — new package, [Y] accept / [n] skip: `)).trim()
+    const answer = (await promptKey(
+      `  ${cyan(c.name)} — new package, [y] accept / [n] skip: `,
+      ["y", "Y", "n", "N"]
+    )).trim().toLowerCase()
     if (answer === "n") return null
     return "as-is"
   }
   const rec = recommendedLevel(c)
-  const answer = (await prompt(`  ${cyan(c.name)} — [p]atch / [m]inor / [M]ajor / [s]kip (rec: ${cyan(rec)}): `)).trim()
-  if (answer === "M" || answer === "major") return "major"
-  switch (answer.toLowerCase()) {
+  const answer = (await promptKey(
+    `  ${cyan(c.name)} — [p]atch / [m]inor / [M]ajor / [s]kip (rec: ${cyan(rec)}): `,
+    ["p", "m", "M", "s"]
+  )).trim()
+  if (answer === "M") return "major"
+  switch (answer) {
     case "": return rec
-    case "p": case "patch": return "patch"
-    case "m": case "minor": return "minor"
-    case "s": case "skip": return null
+    case "p": return "patch"
+    case "m": return "minor"
+    case "s": return null
     default:
       warn(`Unknown option "${answer}"`)
       return null
@@ -123,8 +129,9 @@ async function promptVersionBumps(changedCandidates, dependentCandidates) {
     const current = enriched[currentIdx]
     renderTable(enriched, decisions, currentIdx)
 
-    const action = (await prompt(
-      "[1] Accept current  [2] Edit current  [3] Accept remaining  [4] View logs  [5] Cancel: "
+    const action = (await promptKey(
+      "[1] Accept current  [2] Edit current  [3] Accept remaining  [4] View logs  [5] Cancel: ",
+      ["1", "2", "3", "4", "5"]
     )).trim()
 
     if (action === "5" || action.toLowerCase() === "c" || action.toLowerCase() === "cancel") {
