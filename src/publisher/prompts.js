@@ -74,7 +74,7 @@ function printDigest(enriched) {
     const count = c.intentEntries.length
     const tag = c.intentLevel
       ? `${count} ${count === 1 ? "entry" : "entries"}`
-      : "no intent recorded"
+      : ""
     info(`  ${cyan(c.name.padEnd(24))} ${c.localVersion} → ${nextVersion}   (${recLevel})   ${gray(tag)}`)
   }
 }
@@ -113,11 +113,7 @@ async function promptPerPackage(c) {
   )
 
   if (answer === "v" || answer === "view") {
-    if (c.intentEntries.length === 0) {
-      info("  (no intent recorded)")
-    } else {
-      for (const e of c.intentEntries) info(`    ${e.level}: ${e.summary}`)
-    }
+    for (const e of c.intentEntries) info(`    ${e.level}: ${e.summary}`)
     return promptPerPackage(c)
   }
 
