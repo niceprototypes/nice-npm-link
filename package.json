@@ -1,6 +1,6 @@
 {
   "name": "nice-toolkit",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Link local packages while preventing duplicate React/styled-components. Essential for the Nice ecosystem.",
   "main": "src/index.js",
   "bin": {
