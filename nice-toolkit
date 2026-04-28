@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * nice-npm-link CLI
+ * nice-toolkit CLI
  *
  * A tool for linking local packages in the Nice ecosystem while preventing
  * duplicate React and styled-components instances.

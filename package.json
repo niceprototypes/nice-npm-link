@@ -1,19 +1,19 @@
 {
-  "name": "nice-npm-link",
+  "name": "nice-toolkit",
   "version": "2.2.3",
   "description": "Link local packages while preventing duplicate React/styled-components. Essential for the Nice ecosystem.",
   "main": "src/index.js",
   "bin": {
-    "nice-npm-link": "nice-npm-link",
-    "nnl": "nice-npm-link"
+    "nice-toolkit": "nice-toolkit",
+    "ntk": "nice-toolkit"
   },
   "files": [
     "src",
-    "nice-npm-link",
+    "nice-toolkit",
     "README.md"
   ],
   "scripts": {
-    "test": "node nice-npm-link --help"
+    "test": "node nice-toolkit --help"
   },
   "keywords": [
     "npm",
@@ -29,7 +29,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/niceprototypes/nice-npm-link.git"
+    "url": "git+https://github.com/niceprototypes/nice-toolkit.git"
   },
   "engines": {
     "node": ">=14.0.0"

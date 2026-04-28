@@ -1,7 +1,7 @@
 /**
  * @fileoverview Package creation orchestrator
  *
- * Entry point for `nnl --create`. Validates the package name,
+ * Entry point for `ntk --create`. Validates the package name,
  * scaffolds the package by type, and registers it in registry.json.
  *
  * Supported types:

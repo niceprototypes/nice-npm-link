@@ -7,4 +7,4 @@ node_modules/
 *.swo
 *~
 .npm/
-.nice-npm-link/
+.nice-toolkit/

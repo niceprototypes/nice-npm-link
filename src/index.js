@@ -1,5 +1,5 @@
 /**
- * @fileoverview CLI entry point for nice-npm-link
+ * @fileoverview CLI entry point for nice-toolkit
  *
  * Routes command-line flags to the appropriate operation:
  *
@@ -12,7 +12,7 @@
  *   --clean-only Remove conflicts from a single linked package
  *   (default)    Link a package via file: protocol
  *
- * @module nice-npm-link
+ * @module nice-toolkit
  */
 
 const path = require('path');
@@ -90,7 +90,7 @@ function showNextSteps(resolvedPkgPath, isCRA) {
     log('Restart your dev server if needed');
   }
 
-  log(`To unlink: run ${cyan('npx nice-npm-link --unlink')}`);
+  log(`To unlink: run ${cyan('npx nice-toolkit --unlink')}`);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -256,7 +256,7 @@ function main() {
 
   if (options.bumpLevel) {
     if (!options.bumpSummary) {
-      fail('--bump <level> requires a summary, e.g. nnl --bump major "Rename breakpoint identifiers"');
+      fail('--bump <level> requires a summary, e.g. ntk --bump major "Rename breakpoint identifiers"');
       process.exit(1);
     }
     try {

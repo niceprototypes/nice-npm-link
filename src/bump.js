@@ -3,7 +3,7 @@
  *
  * Each Nice ecosystem package records pending semver intent in a plain-text
  * file at `.nice/bump.md` under the package root. One line per entry, in the
- * form `{level}: {summary}`. Writers append; `nnl --publish` reads and then
+ * form `{level}: {summary}`. Writers append; `ntk --publish` reads and then
  * clears after a successful publish.
  *
  * Plain text was chosen over JSON so merges between branches conflict at the
@@ -21,6 +21,13 @@ const BUMP_FILE = 'bump.md';
 
 const VALID_LEVELS = ['major', 'minor', 'patch'];
 
+const ENTRY_RE = /^(?:\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2})\]\s+)?(major|minor|patch)\s*:\s*(.+)$/i;
+
+function formatTimestamp(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `[${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}]`;
+}
+
 /**
  * Resolves the absolute path to a package's bump file, creating parent
  * directory on demand.
@@ -36,9 +43,11 @@ function bumpFilePath(packageDir) {
  * Reads the pending bump intent for a package.
  *
  * @param {string} packageDir - Package root
- * @returns {{ entries: Array<{level: string, summary: string}>, level: string|null }}
+ * @returns {{ entries: Array<{timestamp: string|null, level: string, summary: string}>, level: string|null }}
  *   entries in file order (oldest first); level is the max across entries
- *   ("major" > "minor" > "patch"), or null if no entries.
+ *   ("major" > "minor" > "patch"), or null if no entries. timestamp is the
+ *   `YYYY-MM-DD HH:MM` value from the line prefix, or null for legacy entries
+ *   written before timestamps were added.
  */
 function readBumpIntent(packageDir) {
   const filePath = bumpFilePath(packageDir);
@@ -50,9 +59,13 @@ function readBumpIntent(packageDir) {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const match = line.match(/^(major|minor|patch)\s*:\s*(.+)$/i);
+      const match = line.match(ENTRY_RE);
       if (!match) return null;
-      return { level: match[1].toLowerCase(), summary: match[2].trim() };
+      return {
+        timestamp: match[1] || null,
+        level: match[2].toLowerCase(),
+        summary: match[3].trim(),
+      };
     })
     .filter(Boolean);
 
@@ -95,7 +108,7 @@ function appendBumpIntent(packageDir, level, summary) {
   const filePath = bumpFilePath(packageDir);
   const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
   const needsNewline = existing.length > 0 && !existing.endsWith('\n');
-  const line = `${level}: ${trimmed}\n`;
+  const line = `${formatTimestamp(new Date())} ${level}: ${trimmed}\n`;
   fs.writeFileSync(filePath, `${existing}${needsNewline ? '\n' : ''}${line}`);
 }
 
@@ -127,5 +140,6 @@ module.exports = {
   computeBumpLevel,
   bumpFilePath,
   bumpFileRelativePath,
+  formatTimestamp,
   VALID_LEVELS,
 };

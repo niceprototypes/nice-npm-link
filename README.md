@@ -1,6 +1,8 @@
-# nice-npm-link
+# nice-toolkit
 
 A utility to streamline the npm linking process for React component libraries when working locally, automatically removing conflicting peer dependencies that cause "Invalid hook call" errors, duplicate React instances, and styled-components context issues.
+
+CLI binaries: `nice-toolkit` (long-form) and `ntk` (short alias).
 
 ## The Story: Why This Tool Exists
 
@@ -18,7 +20,7 @@ This isn't just a React problem - `styled-components`, `@emotion/react`, and sim
 
 The "solution" everyone suggests? Manually delete React from your linked package's `node_modules`, link again, remember to do this every time you reinstall, and hope you don't forget. That's tedious and error-prone.
 
-**`nice-npm-link` automates this entire process.** It removes the conflicting packages from your linked library's `node_modules`, ensures React and friends are listed as peerDependencies, and handles the linking - all in one command.
+**`nice-toolkit` automates this entire process.** It removes the conflicting packages from your linked library's `node_modules`, ensures React and friends are listed as peerDependencies, and handles the linking - all in one command.
 
 ## Why Symlinks Cause Duplicate React Instances
 
@@ -55,7 +57,7 @@ All packages resolve to the same React instance at the top level. With symlinks,
 
 Not all duplicate packages cause problems - only those that maintain **global state** or use **object identity checks**:
 
-**Must be singleton (nice-npm-link removes these):**
+**Must be singleton (nice-toolkit removes these):**
 - `react` - maintains a global Fiber tree and hook state
 - `react-dom` - maintains a global DOM renderer
 - `styled-components` - maintains a global StyleSheet registry and uses React Context
@@ -72,7 +74,7 @@ This is why you can have multiple versions of your own component libraries in `n
 
 ## Solution
 
-`nice-npm-link` solves this by:
+`nice-toolkit` solves this by:
 
 1. **Removing conflicting singleton packages** - Deletes React, React DOM, styled-components, and their TypeScript definitions from the linked package's `node_modules`
 2. **Enforcing peerDependencies** - Ensures React and friends are listed as peerDependencies so they use your app's versions
@@ -83,14 +85,14 @@ This is why you can have multiple versions of your own component libraries in `n
 ### Global Installation (Recommended)
 
 ```bash
-npm install -g nice-npm-link
+npm install -g nice-toolkit
 ```
 
 ### Local Installation
 
 ```bash
-npm install nice-npm-link
-npx nice-npm-link --help
+npm install nice-toolkit
+npx nice-toolkit --help
 ```
 
 ## Usage
@@ -99,42 +101,42 @@ npx nice-npm-link --help
 
 ```bash
 # From your main project directory
-nice-npm-link ../nice-react-button
+nice-toolkit ../nice-react-button
 
 # Or with absolute path
-nice-npm-link /Users/username/Code/nice-react-button
+nice-toolkit /Users/username/Code/nice-react-button
 ```
 
 ### Clean Only (Remove Conflicting Packages)
 
 ```bash
 # Remove default packages only
-nice-npm-link --clean-only
+nice-toolkit --clean-only
 
 # Remove custom packages only
-nice-npm-link --clean-only --exclude @mui/material,@mui/icons-material
+nice-toolkit --clean-only --exclude @mui/material,@mui/icons-material
 
 # Add extra packages to default list
-nice-npm-link --clean-only --add-exclude @emotion/react,@emotion/styled
+nice-toolkit --clean-only --add-exclude @emotion/react,@emotion/styled
 ```
 
 ### Custom Package Exclusion
 
 ```bash
 # Override default packages with custom list
-nice-npm-link --exclude react,react-dom ../nice-react-button
+nice-toolkit --exclude react,react-dom ../nice-react-button
 
 # Add additional packages to the default exclusion list
-nice-npm-link --add-exclude @emotion/react,@emotion/styled ../nice-react-button
+nice-toolkit --add-exclude @emotion/react,@emotion/styled ../nice-react-button
 
 # Combine both (removes only react, react-dom, and @mui packages)
-nice-npm-link --exclude react,react-dom --add-exclude @mui/material ../nice-react-button
+nice-toolkit --exclude react,react-dom --add-exclude @mui/material ../nice-react-button
 ```
 
 ### Help
 
 ```bash
-nice-npm-link --help
+nice-toolkit --help
 ```
 
 ## What It Does
@@ -162,7 +164,7 @@ nice-npm-link --help
 cd /path/to/helpshelf-ui
 
 # Link your button component
-nice-npm-link ../nice-react-button
+nice-toolkit ../nice-react-button
 
 # Now you can import and use the component
 # Changes to nice-react-button will be reflected immediately
@@ -174,17 +176,17 @@ nice-npm-link ../nice-react-button
 
 ```bash
 # Link a package from a monorepo workspace
-nice-npm-link ../my-monorepo/packages/ui-components
+nice-toolkit ../my-monorepo/packages/ui-components
 
 # Force a specific package manager in a monorepo
-nice-npm-link --manager pnpm ../my-monorepo/packages/ui-components
+nice-toolkit --manager pnpm ../my-monorepo/packages/ui-components
 ```
 
 ### Development Workflow with Watch Mode
 
 ```bash
 # 1. Link the package
-nice-npm-link ../nice-react-button
+nice-toolkit ../nice-react-button
 
 # 2. In the linked package directory, start watch mode
 cd ../nice-react-button
@@ -201,9 +203,9 @@ NODE_OPTIONS=--preserve-symlinks npm start
 
 ```bash
 # In your main project, link multiple dependencies
-nice-npm-link ../nice-react-button
-nice-npm-link ../nice-react-icon
-nice-npm-link ../nice-react-flex
+nice-toolkit ../nice-react-button
+nice-toolkit ../nice-react-icon
+nice-toolkit ../nice-react-flex
 
 # All three packages are now linked and share the same React instance
 ```
@@ -212,30 +214,30 @@ nice-npm-link ../nice-react-flex
 
 ```bash
 # Only remove React and React DOM (skip styled-components)
-nice-npm-link --exclude react,react-dom ../my-component
+nice-toolkit --exclude react,react-dom ../my-component
 
 # Remove default packages plus Material-UI
-nice-npm-link --add-exclude @mui/material,@mui/icons-material ../my-component
+nice-toolkit --add-exclude @mui/material,@mui/icons-material ../my-component
 
 # Combine with other options
-nice-npm-link --manager yarn --add-exclude @emotion/react ../my-component --dry-run
+nice-toolkit --manager yarn --add-exclude @emotion/react ../my-component --dry-run
 ```
 
 ### Dry Run for Safety
 
 ```bash
 # Preview what would happen without making changes
-nice-npm-link --dry-run ../nice-react-button
+nice-toolkit --dry-run ../nice-react-button
 
 # See what would be cleaned without linking
-nice-npm-link --clean-only --dry-run ../nice-react-button
+nice-toolkit --clean-only --dry-run ../nice-react-button
 ```
 
 ### Skip Automatic peerDependencies Management
 
 ```bash
 # Link without modifying the linked package's package.json
-nice-npm-link --skip-peer-check ../nice-react-button
+nice-toolkit --skip-peer-check ../nice-react-button
 ```
 
 ## Unlinking
@@ -268,10 +270,10 @@ npm install my-package
 
 ```bash
 # Re-run the link command to clean up
-nice-npm-link ../my-component
+nice-toolkit ../my-component
 
 # Or use clean-only to just remove conflicts
-nice-npm-link --clean-only ../my-component
+nice-toolkit --clean-only ../my-component
 ```
 
 ### Module Not Found After Linking
@@ -284,7 +286,7 @@ nice-npm-link --clean-only ../my-component
 cd ../my-component
 npm run build
 cd -
-nice-npm-link ../my-component
+nice-toolkit ../my-component
 ```
 
 ### Changes Not Appearing in Development
@@ -314,10 +316,10 @@ nice-npm-link ../my-component
 
 ```bash
 # Default behavior removes styled-components
-nice-npm-link ../my-component
+nice-toolkit ../my-component
 
 # Or explicitly add it
-nice-npm-link --add-exclude styled-components ../my-component
+nice-toolkit --add-exclude styled-components ../my-component
 ```
 
 ### TypeScript Declaration Conflicts
@@ -328,7 +330,7 @@ nice-npm-link --add-exclude styled-components ../my-component
 
 ```bash
 # Ensure types are removed
-nice-npm-link --add-exclude @types/react,@types/react-dom ../my-component
+nice-toolkit --add-exclude @types/react,@types/react-dom ../my-component
 
 # Check your linked package's package.json
 # React types should be in devDependencies or peerDependencies, not dependencies
@@ -341,9 +343,9 @@ nice-npm-link --add-exclude @types/react,@types/react-dom ../my-component
 **Solution:** Force the correct package manager:
 
 ```bash
-nice-npm-link --manager pnpm ../my-component
-nice-npm-link --manager yarn ../my-component
-nice-npm-link --manager npm ../my-component
+nice-toolkit --manager pnpm ../my-component
+nice-toolkit --manager yarn ../my-component
+nice-toolkit --manager npm ../my-component
 ```
 
 ### Workspace/Monorepo Conflicts

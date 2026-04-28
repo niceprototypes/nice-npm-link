@@ -1,7 +1,7 @@
 /**
  * @fileoverview Logging utilities with consistent formatting and ANSI colors
  *
- * Provides a unified logging interface for nice-npm-link with:
+ * Provides a unified logging interface for nice-toolkit with:
  * - Color-coded output for different message types
  * - Consistent emoji prefixes for visual scanning
  * - Support for terminal environments that don't support colors

@@ -135,13 +135,13 @@ function findPositionalArg(args, flagsWithValues = new Set()) {
  */
 function showUsage() {
   console.log(`
-${cyan('nice-npm-link')}
+${cyan('nice-toolkit')}
 
 Usage:
-  nnl <package-path> [options]
-  nnl --clean-all [options]
-  nnl --watch [options]
-  nnl --publish [packages...]
+  ntk <package-path> [options]
+  ntk --clean-all [options]
+  ntk --watch [options]
+  ntk --publish [packages...]
 
 Options:
   --clean-all                ${cyan('Recursively')} clean ALL linked packages in current project
@@ -162,20 +162,20 @@ Options:
   --dry-publish              Preview what would be published without making changes
   --bump <level> <summary>   Record a bump intent entry in ./.nice/bump.md
                              level: major | minor | patch
-                             Example: nnl --bump major "Rename breakpoint identifiers"
+                             Example: ntk --bump major "Rename breakpoint identifiers"
   --help, -h                 Show help
 
 Examples:
-  nnl --clean-all            Clean all file: linked packages recursively
-  nnl --clean-only ../my-lib Clean only the specified package
-  nnl ../my-lib              Link and clean a package
-  nnl --dry-run --clean-all  Preview what would be cleaned
-  nnl --publish              Publish all changed packages to npm
-  nnl --publish nice-styles,nice-react-styles  Publish specific packages
-  nnl --dev                  Run dev scripts in all linked packages
-  nnl --dev --watch          Rebuild packages AND trigger reload on changes
-  nnl --watch                Watch dist folders (use with external rebuilder)
-  nnl --watch --watch-dir src Watch src/ instead of dist/
+  ntk --clean-all            Clean all file: linked packages recursively
+  ntk --clean-only ../my-lib Clean only the specified package
+  ntk ../my-lib              Link and clean a package
+  ntk --dry-run --clean-all  Preview what would be cleaned
+  ntk --publish              Publish all changed packages to npm
+  ntk --publish nice-styles,nice-react-styles  Publish specific packages
+  ntk --dev                  Run dev scripts in all linked packages
+  ntk --dev --watch          Rebuild packages AND trigger reload on changes
+  ntk --watch                Watch dist folders (use with external rebuilder)
+  ntk --watch --watch-dir src Watch src/ instead of dist/
 
 Notes:
   ${cyan('--clean-all')} finds all file: dependencies recursively and cleans each one.

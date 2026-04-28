@@ -155,7 +155,7 @@ function removePath(targetPath) {
  * @returns {void}
  *
  * @example
- * ensureDir('/project/.nice-npm-link');
+ * ensureDir('/project/.nice-toolkit');
  */
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });

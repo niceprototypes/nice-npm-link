@@ -4,7 +4,7 @@
     [
       { "name": "nice-styles", "type": "foundation", "sourceAliasable": false },
       { "name": "nice-icons", "type": "foundation", "sourceAliasable": false },
-      { "name": "nice-npm-link", "type": "cli", "sourceAliasable": false },
+      { "name": "nice-toolkit", "type": "cli", "sourceAliasable": false },
       { "name": "nice-vite-watcher", "type": "plugin", "sourceAliasable": false }
     ],
     [

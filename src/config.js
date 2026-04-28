@@ -1,5 +1,5 @@
 /**
- * @fileoverview Configuration constants for nice-npm-link
+ * @fileoverview Configuration constants for nice-toolkit
  *
  * This module defines the default packages that commonly cause conflicts when
  * linking React component libraries, particularly in the Nice ecosystem where
@@ -25,11 +25,11 @@
  *
  * @example
  * // Override with --exclude flag
- * nnl --exclude react,react-dom ../my-lib
+ * ntk --exclude react,react-dom ../my-lib
  *
  * @example
  * // Extend with --add-exclude flag
- * nnl --add-exclude zustand,jotai ../my-lib
+ * ntk --add-exclude zustand,jotai ../my-lib
  */
 const DEFAULT_CONFLICTING_PACKAGES = [
   // React core - must be singleton for hooks to work
@@ -75,7 +75,7 @@ const PEER_ENFORCE = [
  * Directory name for storing backup files (original versions before linking)
  * @constant {string}
  */
-const BACKUP_DIR_NAME = '.nice-npm-link';
+const BACKUP_DIR_NAME = '.nice-toolkit';
 
 /**
  * Filename for the linked packages backup JSON
