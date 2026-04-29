@@ -255,13 +255,13 @@ function main() {
   }
 
   if (options.bumpLevel) {
-    if (!options.bumpSummary) {
-      fail('--bump <level> requires a summary, e.g. ntk --bump major "Rename breakpoint identifiers"');
+    if (!options.bumpMessage) {
+      fail('--bump <level> requires a commit message, e.g. ntk --bump major "Rename breakpoint identifiers"');
       process.exit(1);
     }
     try {
-      appendBumpIntent(projectDir, options.bumpLevel, options.bumpSummary);
-      success(`Recorded ${cyan(options.bumpLevel)} bump: ${gray(options.bumpSummary)}`);
+      appendBumpIntent(projectDir, options.bumpLevel, options.bumpMessage);
+      success(`Recorded ${cyan(options.bumpLevel)} bump: ${gray(options.bumpMessage)}`);
       info(`Commit ${cyan(bumpFileRelativePath())} alongside your change.`);
       process.exit(0);
     } catch (e) {

@@ -1,0 +1,1 @@
+[2026-04-28 20:56] major: Remove --commit flag and its supporting logic

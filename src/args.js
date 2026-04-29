@@ -157,10 +157,10 @@ Options:
   --skip-peer-check          Do not auto-move react/react-dom to peerDependencies
   --create <name>            Create a new Nice ecosystem package
   --type <component>         Package type for --create (default: component)
-  --publish [pkg1,pkg2,...]   Publish changed packages to npm (all if no packages specified)
+  --publish [pkg1,pkg2,...]  Publish changed packages to npm (all if no packages specified)
   --no-npm                   Bump, build, commit, push — but skip npm publish
   --dry-publish              Preview what would be published without making changes
-  --bump <level> <summary>   Record a bump intent entry in ./.nice/bump.md
+  --bump <level> <message>   Record a bump intent entry in ./.nice/bump.md
                              level: major | minor | patch
                              Example: ntk --bump major "Rename breakpoint identifiers"
   --help, -h                 Show help
@@ -250,11 +250,11 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
   const flagsWithValues = new Set(['--exclude', '--add-exclude', '--manager', '--watch-dir', '--publish', '--create', '--type', '--bump']);
   const pkgPath = findPositionalArg(args, flagsWithValues);
 
-  // --bump {level} "{summary}" — append an entry to .nice/bump.md in the
-  // current package. The value of --bump is the level; the summary is the
+  // --bump {level} "{message}" — append an entry to .nice/bump.md in the
+  // current package. The value of --bump is the level; the message is the
   // first positional after the flag.
   const bumpLevel = getArg(args, '--bump');
-  const bumpSummary = bumpLevel ? findBumpSummary(args) : null;
+  const bumpMessage = bumpLevel ? findBumpMessage(args) : null;
 
   return {
     packagesToRemove,
@@ -276,19 +276,19 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
     forcedPM: Boolean(forcedPM),
     pkgPath,
     bumpLevel,
-    bumpSummary,
+    bumpMessage,
     showHelp: false,
   };
 }
 
 /**
- * Collects the summary for `--bump <level> <summary...>`. Everything after
- * `--bump <level>` that is not a flag becomes the summary, joined by spaces.
+ * Collects the message for `--bump <level> <message...>`. Everything after
+ * `--bump <level>` that is not a flag becomes the message, joined by spaces.
  *
  * @param {string[]} args - Raw CLI arguments
- * @returns {string|null} The joined summary, or null if none provided
+ * @returns {string|null} The joined message, or null if none provided
  */
-function findBumpSummary(args) {
+function findBumpMessage(args) {
   const idx = args.indexOf('--bump');
   if (idx === -1) return null;
   // Skip --bump and its level value; collect positionals until next flag
