@@ -28,8 +28,8 @@ const { warn } = require('./logger');
  * @returns {string|null} Relative path, or null if not a file: dependency
  *
  * @example
- * extractFilePath("file:../nice-react-button")
- * // => "../nice-react-button"
+ * extractFilePath("file:../react-button")
+ * // => "../react-button"
  *
  * @example
  * extractFilePath("^1.0.0")

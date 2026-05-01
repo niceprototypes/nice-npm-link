@@ -58,7 +58,7 @@ function packageJson(packageName) {
     author: '',
     license: 'MIT',
     dependencies: {
-      'nice-react-styles': 'file:../nice-react-styles',
+      'nice-react-styles': 'file:../react-styles',
     },
     peerDependencies: {
       react: '>=19.2.0 <20.0.0',
@@ -66,7 +66,7 @@ function packageJson(packageName) {
       'styled-components': '>=6.1.18 <7.0.0',
     },
     devDependencies: {
-      'nice-configuration': 'file:../nice-configuration',
+      'nice-configuration': 'file:../configuration',
       react: '19.2.0',
       'react-dom': '19.2.0',
       'styled-components': '6.1.19',
@@ -135,7 +135,7 @@ export { ${componentName}Styles, get${componentName}Token } from "./tokens"
  */
 function packageExportsJson(componentName) {
   return JSON.stringify({
-    $schema: '../nice-configuration/src/exports/schema.json',
+    $schema: '../configuration/src/exports/schema.json',
     default: componentName,
     components: [componentName],
     tokens: [componentName],

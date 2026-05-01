@@ -42,9 +42,10 @@ function validateName(name, type) {
     return { valid: false, error: `${name} is already registered in registry.json` };
   }
 
-  // Check if directory already exists on disk
-  if (fs.existsSync(path.join(NICE_BASE, name))) {
-    return { valid: false, error: `Directory ~/Code/${name} already exists` };
+  // Check if directory already exists on disk — folder drops the "nice-" prefix
+  const folderName = name.replace(/^nice-/, '');
+  if (fs.existsSync(path.join(NICE_BASE, folderName))) {
+    return { valid: false, error: `Directory ~/nice/${folderName} already exists` };
   }
 
   return { valid: true };
@@ -116,7 +117,7 @@ function create({ name, type, dryRun = false }) {
   addToRegistry(name, type === 'component' ? 'react-component' : type);
 
   // ── Install dependencies ──────────────────────────────────────────────────
-  const pkgDir = path.join(NICE_BASE, name);
+  const pkgDir = path.join(NICE_BASE, name.replace(/^nice-/, ''));
   try {
     info('Installing dependencies...');
     const { execSync } = require('child_process');
@@ -129,7 +130,7 @@ function create({ name, type, dryRun = false }) {
   // ── Done ──────────────────────────────────────────────────────────────────
   console.log('');
   success(`${cyan(name)} is ready`);
-  log(`  cd ~/Code/${name}`);
+  log(`  cd ~/nice/${name.replace(/^nice-/, '')}`);
   log('  npm run dev');
 }
 

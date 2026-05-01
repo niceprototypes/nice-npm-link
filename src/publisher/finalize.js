@@ -10,7 +10,7 @@
 const { log, info, success, warn, fail } = require("../logger")
 const { run, pkgDir, getLocalVersion } = require("./helpers")
 const { restoreFileDeps } = require("./deps")
-const { clearBumpIntent } = require("../bump")
+const { clearBumpIntent, readBumpIntent, composeCommitMessage } = require("../bump")
 
 /**
  * Restores file: deps for all packages that had deps swapped.
@@ -42,11 +42,35 @@ function commitAndTag(published) {
     const version = getLocalVersion(name)
     const tag = `v${version}`
 
+    // Read entries before clearing so they can drive the commit subject/body.
+    // Ignores the ✓ marker — every entry the publish covers belongs in the
+    // commit message, whether or not `--commit` was run earlier.
+    let bumpMessage = ""
+    try {
+      const { entries } = readBumpIntent(dir)
+      if (entries.length > 0) bumpMessage = composeCommitMessage(entries)
+    } catch { /* no bump file or unreadable — fall through */ }
+
     // Clear pending bump intent so the cleared file lands in the publish commit
     try { clearBumpIntent(dir) } catch { /* no-op if the file never existed */ }
 
+    // Compose final commit message: version line on top, bump narrative below.
+    // The version stays as the first line so existing `git log --oneline`
+    // habits continue to work; the body adds the user-visible context.
+    const commitMessage = bumpMessage
+      ? `${version}\n\n${bumpMessage}`
+      : version
+
     try {
-      run(`cd "${dir}" && git add -A && git commit -m "${version}" 2>/dev/null`)
+      const fs = require("fs")
+      const path = require("path")
+      const tmpFile = path.join(dir, ".git", "COMMIT_EDITMSG_NTK")
+      fs.writeFileSync(tmpFile, commitMessage)
+      try {
+        run(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
+      } finally {
+        try { fs.unlinkSync(tmpFile) } catch { /* best-effort cleanup */ }
+      }
 
       // Tag the publish commit for future change detection
       run(`cd "${dir}" && git tag "${tag}"`)

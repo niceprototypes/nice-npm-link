@@ -64,7 +64,7 @@ function buildFileTree(componentName) {
 }
 
 /**
- * Scaffolds a component package at ~/Code/{packageName}
+ * Scaffolds a component package at ~/nice/{folderName} (folder = packageName without "nice-" prefix)
  *
  * Steps:
  *   1. Validate the directory doesn't already exist
@@ -79,7 +79,8 @@ function buildFileTree(componentName) {
 function scaffoldComponent(packageName) {
   const componentName = templates.toComponentName(packageName);
   const prefix = templates.toPrefix(componentName);
-  const pkgDir = path.join(NICE_BASE, packageName);
+  // Folder name drops the "nice-" prefix from the npm package name
+  const pkgDir = path.join(NICE_BASE, packageName.replace(/^nice-/, ''));
 
   // Guard — prevent overwriting existing packages
   if (fs.existsSync(pkgDir)) {
@@ -138,7 +139,7 @@ function scaffoldComponent(packageName) {
  * @param {string} prefix - Lowercase component prefix (e.g., "lightbox")
  */
 function registerComponentToken(prefix) {
-  const componentJsonPath = path.join(NICE_BASE, 'nice-styles', 'src', 'tokens', 'component.json');
+  const componentJsonPath = path.join(NICE_BASE, 'styles', 'src', 'tokens', 'component.json');
 
   if (!fs.existsSync(componentJsonPath)) {
     fail('nice-styles/src/tokens/component.json not found — skipping token registration');

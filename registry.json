@@ -1,5 +1,5 @@
 {
-  "basePath": "~/Code",
+  "basePath": "~/nice",
   "tiers": [
     [
       { "name": "nice-styles", "type": "foundation", "sourceAliasable": false },
@@ -16,6 +16,7 @@
     ],
     [
       { "name": "nice-react-icon", "type": "react-component", "sourceAliasable": false },
+      { "name": "nice-react-icon-vendor", "type": "react-component", "sourceAliasable": false },
       { "name": "nice-react-tile", "type": "react-component", "sourceAliasable": true }
     ],
     [

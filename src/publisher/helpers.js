@@ -100,7 +100,8 @@ function run(cmd, options = {}) {
  * @returns {string} Absolute path
  */
 function pkgDir(name) {
-  return path.join(NICE_BASE, name);
+  // Folder name drops the "nice-" prefix from the npm package name
+  return path.join(NICE_BASE, name.replace(/^nice-/, ''));
 }
 
 /**

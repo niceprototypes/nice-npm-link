@@ -14,7 +14,7 @@ const { getTiers, getPackageNames, REGISTRY_PATH } = require('../registry');
  * Base directory for all nice-* packages
  * @constant {string}
  */
-const NICE_BASE = path.join(require('os').homedir(), 'Code');
+const NICE_BASE = path.join(require('os').homedir(), 'nice');
 
 /**
  * Publish order based on dependency chain (bottom to top).

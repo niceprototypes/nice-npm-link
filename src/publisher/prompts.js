@@ -261,7 +261,8 @@ async function promptVersionBumps(changedCandidates, dependentCandidates) {
       if (current.intentEntries.length > 0) {
         for (const e of current.intentEntries) {
           const ts = e.timestamp ? `[${e.timestamp}] ` : ""
-          info(`    ${ts}${e.level}: ${e.summary}`)
+          const mark = e.consumed ? "✓ " : ""
+          info(`    ${ts}${mark}${e.level}: ${e.message}`)
         }
       }
       continue

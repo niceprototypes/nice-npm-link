@@ -186,7 +186,8 @@ function getLinkedPackageMap(basePath) {
   const map = {};
 
   for (const entry of linkable) {
-    map[entry.name] = path.join(resolvedBase, entry.name);
+    // Folder name drops the "nice-" prefix from the npm package name
+    map[entry.name] = path.join(resolvedBase, entry.name.replace(/^nice-/, ''));
   }
 
   return map;
