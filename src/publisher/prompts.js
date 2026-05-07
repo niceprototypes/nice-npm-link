@@ -244,13 +244,14 @@ async function promptVersionBumps(changedCandidates, dependentCandidates) {
     renderTable(enriched, decisions, currentIdx)
 
     const action = (await promptKey(
-      "[1] Accept current  [2] Edit current  [3] Accept remaining  [4] View logs  [5] Cancel: ",
-      ["1", "2", "3", "4", "5"]
+      "[1] Accept current  [2] Edit current  [3] Accept remaining  [4] View logs  [Esc] Cancel: ",
+      ["1", "2", "3", "4", ""]
     )).trim()
 
-    // [5] / c / cancel — abort the entire publish, returning null to the
-    // caller so no version bumps are committed.
-    if (action === "5" || action.toLowerCase() === "c" || action.toLowerCase() === "cancel") {
+    // [Esc] / c / cancel — abort the entire publish, returning null to the
+    // caller so no version bumps are committed. `c`/`cancel` remain
+    // accepted for the non-TTY fallback path (full-line prompt).
+    if (action === "" || action.toLowerCase() === "c" || action.toLowerCase() === "cancel") {
       info("Aborted.")
       return null
     }

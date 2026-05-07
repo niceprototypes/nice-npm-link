@@ -69,6 +69,16 @@ function promptKey(question, acceptKeys) {
         resolve('');
         return;
       }
+      // Bare Esc — only matches when the data chunk is exactly `\x1b` and
+      // not the prefix of a longer escape sequence (arrow keys are
+      // delivered as `\x1b[A`/`\x1b[B`/etc. in a single chunk, so they
+      // miss this exact-match check).
+      if (key === '' && acceptKeys.includes('')) {
+        cleanup();
+        process.stdout.write('Esc\n');
+        resolve(key);
+        return;
+      }
       // Matched key — submit immediately
       if (acceptKeys.includes(key)) {
         cleanup();
