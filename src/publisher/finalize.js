@@ -7,6 +7,8 @@
  * @module publisher/finalize
  */
 
+const fs = require("fs")
+const path = require("path")
 const { log, info, success, warn, fail } = require("../logger")
 const { removeFile } = require("../fs-utils")
 const { runShell, pkgDir, getLocalVersion } = require("./helpers")
@@ -25,12 +27,83 @@ function restoreAllDeps(swappedDeps) {
 }
 
 /**
- * Commits version changes, tags the commit, and pushes to remote.
+ * Reads pending bump entries (if any) and clears the file. Returns the
+ * composed commit-message body, or an empty string when there are no
+ * entries. Errors reading or clearing the file are intentionally
+ * swallowed — the publish commit can still proceed with just the
+ * version line.
  *
- * Each published package gets:
- * 1. All changes staged and committed with the version as the message
- * 2. A git tag v{version} for future change detection
- * 3. Commit and tag pushed to origin/main
+ * @param {string} dir - Package root
+ * @returns {string} Bump narrative or ""
+ */
+function consumeBumpIntent(dir) {
+  let bumpMessage = ""
+  try {
+    const { entries } = readBumpIntent(dir)
+    if (entries.length > 0) bumpMessage = composeCommitMessage(entries)
+  } catch { /* no bump file or unreadable — fall through */ }
+
+  try { clearBumpIntent(dir) } catch { /* no-op if the file never existed */ }
+
+  return bumpMessage
+}
+
+/**
+ * Writes the commit message to a tmp file inside `.git/`, runs
+ * `git commit -F` against it, and removes the tmp file afterward.
+ *
+ * The tmp-file path is used (rather than `git commit -m`) so multi-line
+ * messages preserve their formatting without shell-quoting hazards.
+ *
+ * @param {string} dir - Package root
+ * @param {string} commitMessage - Final commit subject + body
+ */
+function commitWithMessageFile(dir, commitMessage) {
+  const tmpFile = path.join(dir, ".git", "COMMIT_EDITMSG_NTK")
+  fs.writeFileSync(tmpFile, commitMessage)
+  try {
+    runShell(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
+  } finally {
+    try { removeFile(tmpFile) } catch { /* best-effort cleanup */ }
+  }
+}
+
+/**
+ * Commits version changes for one package, tags the commit, and pushes
+ * commit + tag to origin/main. Errors are caught so a single package
+ * failure doesn't halt the rest of the loop.
+ *
+ * @param {string} name - Package name
+ */
+function commitAndTagPackage(name) {
+  const dir = pkgDir(name)
+  const version = getLocalVersion(name)
+  const tag = `v${version}`
+
+  const bumpMessage = consumeBumpIntent(dir)
+
+  // Compose final commit message: version line on top, bump narrative below.
+  // The version stays as the first line so existing `git log --oneline`
+  // habits continue to work; the body adds the user-visible context.
+  const commitMessage = bumpMessage
+    ? `${version}\n\n${bumpMessage}`
+    : version
+
+  try {
+    commitWithMessageFile(dir, commitMessage)
+
+    runShell(`cd "${dir}" && git tag "${tag}"`)
+    runShell(`cd "${dir}" && git push origin main --tags 2>/dev/null`)
+
+    info(`Pushed ${name}@${version} (tagged ${tag})`)
+  } catch {
+    warn(`Could not commit/push ${name} — commit manually`)
+  }
+}
+
+/**
+ * Commits version changes, tags the commit, and pushes to remote
+ * for every successfully published package.
  *
  * @param {string[]} published - Names of successfully published packages
  */
@@ -39,49 +112,7 @@ function commitAndTag(published) {
 
   log("Committing version changes...")
   for (const name of published) {
-    const dir = pkgDir(name)
-    const version = getLocalVersion(name)
-    const tag = `v${version}`
-
-    // Read entries before clearing so they can drive the commit subject/body.
-    // Ignores the ✓ marker — every entry the publish covers belongs in the
-    // commit message, whether or not `--commit` was run earlier.
-    let bumpMessage = ""
-    try {
-      const { entries } = readBumpIntent(dir)
-      if (entries.length > 0) bumpMessage = composeCommitMessage(entries)
-    } catch { /* no bump file or unreadable — fall through */ }
-
-    // Clear pending bump intent so the cleared file lands in the publish commit
-    try { clearBumpIntent(dir) } catch { /* no-op if the file never existed */ }
-
-    // Compose final commit message: version line on top, bump narrative below.
-    // The version stays as the first line so existing `git log --oneline`
-    // habits continue to work; the body adds the user-visible context.
-    const commitMessage = bumpMessage
-      ? `${version}\n\n${bumpMessage}`
-      : version
-
-    try {
-      const fs = require("fs")
-      const path = require("path")
-      const tmpFile = path.join(dir, ".git", "COMMIT_EDITMSG_NTK")
-      fs.writeFileSync(tmpFile, commitMessage)
-      try {
-        runShell(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
-      } finally {
-        try { removeFile(tmpFile) } catch { /* best-effort cleanup */ }
-      }
-
-      // Tag the publish commit for future change detection
-      runShell(`cd "${dir}" && git tag "${tag}"`)
-
-      // Push commit and tag together
-      runShell(`cd "${dir}" && git push origin main --tags 2>/dev/null`)
-      info(`Pushed ${name}@${version} (tagged ${tag})`)
-    } catch {
-      warn(`Could not commit/push ${name} — commit manually`)
-    }
+    commitAndTagPackage(name)
   }
 }
 

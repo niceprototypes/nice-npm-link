@@ -1,0 +1,1 @@
+[2026-05-07 02:30] patch: Split fs-utils, bump, registry, creator/templates, and publisher/helpers into per-concern folders; extract publishOnce, commitAndTagPackage, and linker version-restore helpers to flatten nested logic

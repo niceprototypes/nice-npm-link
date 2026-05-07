@@ -190,6 +190,45 @@ function linkPackage(pm, pkgDir, pkgName, { dryRun = false } = {}) {
  * unlinkPackages('npm');
  * // Restores all linked packages to their original npm versions
  */
+/**
+ * Whether a dependency is currently `file:`-linked in the project's
+ * package.json (in either `dependencies` or `devDependencies`).
+ *
+ * @param {object} packageJson - Parsed project package.json
+ * @param {string} pkgName - Dependency name
+ * @returns {boolean}
+ */
+function isLinkedDependency(packageJson, pkgName) {
+  const current =
+    packageJson.dependencies?.[pkgName] || packageJson.devDependencies?.[pkgName];
+  return Boolean(current && current.startsWith('file:'));
+}
+
+/**
+ * Restores `pkgName`'s version in `packageJson` to `originalVersion`
+ * (mutating in place). Looks in `dependencies` first, then
+ * `devDependencies`. Returns whether anything was changed.
+ *
+ * Caller is responsible for the `isLinkedDependency` precheck so this
+ * helper stays focused on the write.
+ *
+ * @param {object} packageJson - Parsed project package.json (mutated)
+ * @param {string} pkgName
+ * @param {string} originalVersion - Semver value to restore to
+ * @returns {boolean} True if a slot was found and overwritten
+ */
+function restorePackageVersionInPlace(packageJson, pkgName, originalVersion) {
+  if (packageJson.dependencies?.[pkgName]) {
+    packageJson.dependencies[pkgName] = originalVersion;
+    return true;
+  }
+  if (packageJson.devDependencies?.[pkgName]) {
+    packageJson.devDependencies[pkgName] = originalVersion;
+    return true;
+  }
+  return false;
+}
+
 function unlinkPackages(pm, { dryRun = false } = {}) {
   const projectDir = process.cwd();
   const packageJsonPath = path.join(projectDir, 'package.json');
@@ -204,23 +243,17 @@ function unlinkPackages(pm, { dryRun = false } = {}) {
   let unlinkedCount = 0;
 
   for (const [pkgName, originalVersion] of Object.entries(backup)) {
-    const currentVersion =
-      packageJson.dependencies?.[pkgName] || packageJson.devDependencies?.[pkgName];
+    if (!isLinkedDependency(packageJson, pkgName)) continue;
 
-    if (currentVersion && currentVersion.startsWith('file:')) {
-      if (dryRun) {
-        info(`[dry-run] Would restore ${pkgName} to ${originalVersion}`);
-        unlinkedCount++;
-      } else {
-        // Restore to original version
-        if (packageJson.dependencies?.[pkgName]) {
-          packageJson.dependencies[pkgName] = originalVersion;
-        } else if (packageJson.devDependencies?.[pkgName]) {
-          packageJson.devDependencies[pkgName] = originalVersion;
-        }
-        success(`Restored ${cyan(pkgName)} to ${originalVersion}`);
-        unlinkedCount++;
-      }
+    if (dryRun) {
+      info(`[dry-run] Would restore ${pkgName} to ${originalVersion}`);
+      unlinkedCount++;
+      continue;
+    }
+
+    if (restorePackageVersionInPlace(packageJson, pkgName, originalVersion)) {
+      success(`Restored ${cyan(pkgName)} to ${originalVersion}`);
+      unlinkedCount++;
     }
   }
 
@@ -232,7 +265,6 @@ function unlinkPackages(pm, { dryRun = false } = {}) {
     run(pm, ['install']);
     success('Installed packages from npm');
 
-    // Clean up backup
     cleanupBackup(projectDir);
 
     success(`Unlinked ${unlinkedCount} package(s)`);
