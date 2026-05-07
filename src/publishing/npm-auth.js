@@ -4,7 +4,7 @@
  */
 
 const { execSync } = require('child_process');
-const { info, fail, cyan } = require('./logger');
+const { info, fail, cyan } = require('../shared/logger');
 
 /**
  * Verifies the user is authenticated with npm.

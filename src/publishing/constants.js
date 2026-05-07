@@ -8,7 +8,7 @@
  */
 
 const path = require('path');
-const { getTiers, getPackageNames, REGISTRY_PATH } = require('../registry');
+const { getTiers, getPackageNames, REGISTRY_PATH } = require('../shared/registry');
 
 /**
  * Base directory for all nice-* packages

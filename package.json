@@ -5,7 +5,7 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./registry": "./src/registry/index.js",
+    "./registry": "./src/shared/registry/index.js",
     "./registry.json": "./registry.json",
     "./package.json": "./package.json"
   },

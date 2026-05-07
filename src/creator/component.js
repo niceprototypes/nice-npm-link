@@ -27,8 +27,8 @@
 
 const path = require('path');
 const fs = require('fs');
-const { log, info, success, fail, cyan } = require('../logger');
-const { NICE_BASE } = require('../publisher/constants');
+const { log, info, success, fail, cyan } = require('../shared/logger');
+const { NICE_BASE } = require('../publishing/constants');
 const templates = require('./templates');
 
 /**

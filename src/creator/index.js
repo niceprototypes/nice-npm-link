@@ -12,9 +12,9 @@
 
 const path = require('path');
 const fs = require('fs');
-const { log, info, success, warn, fail, cyan } = require('../logger');
-const { getPackageNames, addPackage, REGISTRY_PATH } = require('../registry');
-const { NICE_BASE } = require('../publisher/constants');
+const { log, info, success, warn, fail, cyan } = require('../shared/logger');
+const { getPackageNames, addPackage, REGISTRY_PATH } = require('../shared/registry');
+const { NICE_BASE } = require('../publishing/constants');
 const { scaffoldComponent } = require('./component');
 
 /**

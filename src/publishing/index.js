@@ -15,8 +15,8 @@
  * @module publisher
  */
 
-const { log, info, cyan, green, gray } = require("../logger")
-const { verifyNpmAuth } = require("../npm-auth")
+const { log, info, cyan, green, gray } = require("../shared/logger")
+const { verifyNpmAuth } = require("./npm-auth")
 const { prompt } = require("./helpers")
 const { PUBLISH_TIERS, ALL_PACKAGES } = require("./constants")
 const { bumpVersion } = require("./versioning")
@@ -117,7 +117,7 @@ async function publish({ packages: requestedPackages, doPublish = true, dryRun =
   const { publishable, buildFailed, swappedDeps } = buildPackages(toPublish)
 
   if (publishable.length === 0) {
-    const { fail } = require("../logger")
+    const { fail } = require("../shared/logger")
     fail("All builds failed. Nothing to publish.")
     restoreAllDeps(swappedDeps)
     return

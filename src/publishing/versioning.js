@@ -4,7 +4,7 @@
  */
 
 const path = require('path');
-const { readJSON, writeJSON, clearCache } = require('../fs-utils');
+const { readJSON, writeJSON, clearCache } = require('../shared/fs-utils');
 const { pkgDir } = require('./helpers');
 
 /**

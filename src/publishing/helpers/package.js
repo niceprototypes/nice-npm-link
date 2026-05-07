@@ -6,7 +6,7 @@
  */
 
 const path = require('path');
-const { readJSON } = require('../../fs-utils');
+const { readJSON } = require('../../shared/fs-utils');
 const { NICE_BASE } = require('../constants');
 const { runShell } = require('./shell');
 

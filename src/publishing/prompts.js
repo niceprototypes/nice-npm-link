@@ -29,10 +29,10 @@
  * @property {string} [bumpType] - "major"|"minor"|"patch"|"as-is" — set when status="accepted"
  */
 
-const { info, warn, cyan, gray, green, yellow } = require("../logger")
+const { info, warn, cyan, gray, green, yellow } = require("../shared/logger")
 const { prompt, promptKey, pkgDir } = require("./helpers")
 const { calcVersion } = require("./versioning")
-const { readBumpIntent } = require("../bump")
+const { readBumpIntent } = require("../shared/bump")
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers

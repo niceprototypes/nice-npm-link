@@ -12,7 +12,7 @@
  * @module publisher/release
  */
 
-const { log, info, success, warn, fail } = require("../logger")
+const { log, info, success, warn, fail } = require("../shared/logger")
 const { runShell, pkgDir } = require("./helpers")
 const { createOtpManager, isOtpError } = require("./otp")
 

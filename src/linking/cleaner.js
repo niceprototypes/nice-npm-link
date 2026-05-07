@@ -10,8 +10,8 @@
  */
 
 const path = require('path');
-const { pathExists, removePath } = require('./fs-utils');
-const { log, info, success, fail, gray } = require('./logger');
+const { pathExists, removePath } = require('../shared/fs-utils');
+const { log, info, success, fail, gray } = require('../shared/logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Single Package Cleaning
@@ -143,7 +143,7 @@ function cleanAllLinkedPackages(projectDir, packages, options = {}) {
   // Import here to avoid circular dependency
   const { findAllLinkedPackages } = require('./discovery');
   const { ensurePeerDeps } = require('./peer-deps');
-  const { cyan } = require('./logger');
+  const { cyan } = require('../shared/logger');
 
   log(`Scanning for all linked packages in ${gray(projectDir)}...`);
 

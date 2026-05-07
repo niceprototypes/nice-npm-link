@@ -23,8 +23,8 @@
  * @module publisher/display
  */
 
-const { cyan, gray, green, yellow } = require("../logger")
-const { getTierIndexMap } = require("../registry")
+const { cyan, gray, green, yellow } = require("../shared/logger")
+const { getTierIndexMap } = require("../shared/registry")
 
 /**
  * Fallback tier for candidates whose name is not in the registry.

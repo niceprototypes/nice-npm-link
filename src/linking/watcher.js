@@ -17,8 +17,8 @@
 const fs = require('fs');
 const path = require('path');
 const { findAllLinkedPackages } = require('./discovery');
-const { removeFile, getPackageName } = require('./fs-utils');
-const { log, info, success, warn, cyan, gray } = require('./logger');
+const { removeFile, getPackageName } = require('../shared/fs-utils');
+const { log, info, success, warn, cyan, gray } = require('../shared/logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants

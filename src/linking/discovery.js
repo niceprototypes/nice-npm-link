@@ -14,8 +14,8 @@
  */
 
 const path = require('path');
-const { readJSON, pathExists } = require('./fs-utils');
-const { warn } = require('./logger');
+const { readJSON, pathExists } = require('../shared/fs-utils');
+const { warn } = require('../shared/logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Linked Package Discovery

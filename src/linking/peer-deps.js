@@ -9,8 +9,8 @@
  */
 
 const path = require('path');
-const { readJSON, writeJSON } = require('./fs-utils');
-const { log, info, success, cyan } = require('./logger');
+const { readJSON, writeJSON } = require('../shared/fs-utils');
+const { log, info, success, cyan } = require('../shared/logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Peer Dependency Enforcement

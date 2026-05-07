@@ -11,7 +11,7 @@ const path = require('path');
  * Path to registry.json (lives at the toolkit package root).
  * @constant {string}
  */
-const REGISTRY_PATH = path.join(__dirname, '..', '..', 'registry.json');
+const REGISTRY_PATH = path.join(__dirname, '..', '..', '..', 'registry.json');
 
 /**
  * Valid package type values.

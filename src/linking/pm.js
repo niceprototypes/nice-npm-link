@@ -9,7 +9,7 @@
 
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { pathExists } = require('./fs-utils');
+const { pathExists } = require('../shared/fs-utils');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Package Manager Detection
@@ -128,7 +128,7 @@ function run(pm, argv, opts = {}) {
  * // => true
  */
 function isWorkspaceRoot(cwd = process.cwd()) {
-  const { readJSON } = require('./fs-utils');
+  const { readJSON } = require('../shared/fs-utils');
 
   try {
     const pkgJsonPath = path.join(cwd, 'package.json');

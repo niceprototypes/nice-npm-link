@@ -12,8 +12,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { findAllLinkedPackages } = require('./discovery');
-const { getPackageName } = require('./fs-utils');
-const { log, info, success, warn, cyan, gray } = require('./logger');
+const { getPackageName } = require('../shared/fs-utils');
+const { log, info, success, warn, cyan, gray } = require('../shared/logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants

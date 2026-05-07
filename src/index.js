@@ -16,20 +16,20 @@
  */
 
 const path = require('path');
-const { DEFAULT_CONFLICTING_PACKAGES, PEER_ENFORCE } = require('./config');
-const { log, info, success, warn, fail, cyan, gray } = require('./logger');
+const { DEFAULT_CONFLICTING_PACKAGES, PEER_ENFORCE } = require('./shared/config');
+const { log, info, success, warn, fail, cyan, gray } = require('./shared/logger');
 const { showUsage, parseArgs } = require('./args');
-const { detectPM, isWorkspaceRoot } = require('./pm');
-const { pathExists, readJSON } = require('./fs-utils');
-const { findAllLinkedPackages, readPkgName, validatePackageDir } = require('./discovery');
-const { ensurePeerDeps } = require('./peer-deps');
-const { removeConflictsInDir, cleanAllLinkedPackages } = require('./cleaner');
-const { linkPackage, unlinkPackages } = require('./linker');
-const { startWatching, TRIGGER_FILE_NAME } = require('./watcher');
-const { startDevRunner } = require('./dev-runner');
-const { publish } = require('./publisher');
+const { detectPM, isWorkspaceRoot } = require('./linking/pm');
+const { pathExists, readJSON } = require('./shared/fs-utils');
+const { findAllLinkedPackages, readPkgName, validatePackageDir } = require('./linking/discovery');
+const { ensurePeerDeps } = require('./linking/peer-deps');
+const { removeConflictsInDir, cleanAllLinkedPackages } = require('./linking/cleaner');
+const { linkPackage, unlinkPackages } = require('./linking/linker');
+const { startWatching, TRIGGER_FILE_NAME } = require('./linking/watcher');
+const { startDevRunner } = require('./linking/dev-runner');
+const { publish } = require('./publishing');
 const { create } = require('./creator');
-const { appendBumpIntent, bumpFileRelativePath } = require('./bump');
+const { appendBumpIntent, bumpFileRelativePath } = require('./shared/bump');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers

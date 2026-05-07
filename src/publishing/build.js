@@ -8,8 +8,8 @@
  */
 
 const path = require("path")
-const { readJSON } = require("../fs-utils")
-const { info, fail, cyan } = require("../logger")
+const { readJSON } = require("../shared/fs-utils")
+const { info, fail, cyan } = require("../shared/logger")
 const { runShell, pkgDir } = require("./helpers")
 const { swapFileDepsToSemver } = require("./deps")
 

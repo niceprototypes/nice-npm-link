@@ -9,7 +9,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { readJSON } = require('../fs-utils');
+const { readJSON } = require('../shared/fs-utils');
 const { ALL_PACKAGES } = require('./constants');
 const { pkgDir } = require('./helpers');
 

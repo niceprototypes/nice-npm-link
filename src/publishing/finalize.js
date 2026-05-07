@@ -9,11 +9,11 @@
 
 const fs = require("fs")
 const path = require("path")
-const { log, info, success, warn, fail } = require("../logger")
-const { removeFile } = require("../fs-utils")
+const { log, info, success, warn, fail } = require("../shared/logger")
+const { removeFile } = require("../shared/fs-utils")
 const { runShell, pkgDir, getLocalVersion } = require("./helpers")
 const { restoreFileDeps } = require("./deps")
-const { clearBumpIntent, readBumpIntent, composeCommitMessage } = require("../bump")
+const { clearBumpIntent, readBumpIntent, composeCommitMessage } = require("../shared/bump")
 
 /**
  * Restores file: deps for all packages that had deps swapped.

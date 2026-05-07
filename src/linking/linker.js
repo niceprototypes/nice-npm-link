@@ -22,10 +22,10 @@ const {
   readDir,
   removeEmptyDir,
   removePath,
-} = require('./fs-utils');
-const { log, info, success, fail, cyan } = require('./logger');
+} = require('../shared/fs-utils');
+const { log, info, success, fail, cyan } = require('../shared/logger');
 const { run } = require('./pm');
-const { BACKUP_DIR_NAME, BACKUP_FILE_NAME } = require('./config');
+const { BACKUP_DIR_NAME, BACKUP_FILE_NAME } = require('../shared/config');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Version Backup
