@@ -3,12 +3,19 @@
   "version": "3.1.1",
   "description": "Link local packages while preventing duplicate React/styled-components. Essential for the Nice ecosystem.",
   "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./registry": "./src/registry/index.js",
+    "./registry.json": "./registry.json",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "nice-toolkit": "nice-toolkit",
     "ntk": "nice-toolkit"
   },
   "files": [
     "src",
+    "registry.json",
     "nice-toolkit",
     "README.md"
   ],
