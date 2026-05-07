@@ -83,13 +83,17 @@ function promptKey(question, acceptKeys) {
 }
 
 /**
- * Runs a shell command and returns trimmed stdout
+ * Runs a shell command and returns trimmed stdout.
  *
- * @param {string} cmd - Command to execute
+ * Named `runShell` to disambiguate from `pm.run(pm, argv)` in
+ * `../pm.js`, which takes a parsed argv array and a package-manager
+ * binary rather than a single shell-string command.
+ *
+ * @param {string} cmd - Shell command to execute
  * @param {object} [options] - execSync options
  * @returns {string} Trimmed stdout
  */
-function run(cmd, options = {}) {
+function runShell(cmd, options = {}) {
   return execSync(cmd, { encoding: 'utf8', ...options }).trim();
 }
 
@@ -112,7 +116,7 @@ function pkgDir(name) {
  */
 function getNpmVersion(name) {
   try {
-    return run(`npm view ${name} version 2>/dev/null`);
+    return runShell(`npm view ${name} version 2>/dev/null`);
   } catch {
     return null;
   }
@@ -140,7 +144,7 @@ function getLocalVersion(name) {
  */
 function getChangeStatus(name, npmVersion) {
   const dir = pkgDir(name);
-  const dirty = parseInt(run(`cd "${dir}" && git status --porcelain 2>/dev/null | wc -l`), 10);
+  const dirty = parseInt(runShell(`cd "${dir}" && git status --porcelain 2>/dev/null | wc -l`), 10);
 
   // No published version — everything is new
   if (!npmVersion) {
@@ -151,14 +155,14 @@ function getChangeStatus(name, npmVersion) {
 
   // Check if the tag exists
   try {
-    run(`cd "${dir}" && git rev-parse "${tag}" 2>/dev/null`);
+    runShell(`cd "${dir}" && git rev-parse "${tag}" 2>/dev/null`);
   } catch {
     // Tag doesn't exist — treat as changed so the package isn't invisible
     return { commitsSincePublish: 1, dirty, hasTag: false };
   }
 
   const commitsSincePublish = parseInt(
-    run(`cd "${dir}" && git rev-list "${tag}"..HEAD --count 2>/dev/null`),
+    runShell(`cd "${dir}" && git rev-list "${tag}"..HEAD --count 2>/dev/null`),
     10
   );
 
@@ -168,7 +172,7 @@ function getChangeStatus(name, npmVersion) {
 module.exports = {
   prompt,
   promptKey,
-  run,
+  runShell,
   pkgDir,
   getNpmVersion,
   getLocalVersion,

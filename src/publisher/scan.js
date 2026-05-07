@@ -15,6 +15,22 @@ const { pkgDir, getNpmVersion, getLocalVersion, getChangeStatus } = require("./h
 const { resolveAffected } = require("./graph")
 
 /**
+ * Whether a registered package has a directory on disk. Returns false
+ * for registry entries whose source folder isn't checked out locally.
+ *
+ * @param {string} name - Package name
+ * @returns {boolean}
+ */
+function packageExistsLocally(name) {
+  try {
+    fs.statSync(pkgDir(name))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Discovers which packages have publishable changes.
  *
  * When requestedPackages is provided, resolves the full dependency graph
@@ -38,13 +54,7 @@ function scanPackages(requestedPackages) {
     const allAffected = [...changedSet, ...dependentSet]
 
     for (const name of allAffected) {
-      // Skip packages whose directory doesn't exist locally
-      const dir = pkgDir(name)
-      try {
-        fs.statSync(dir)
-      } catch {
-        continue
-      }
+      if (!packageExistsLocally(name)) continue
 
       const localVersion = getLocalVersion(name)
       const npmVersion = getNpmVersion(name)
@@ -64,12 +74,7 @@ function scanPackages(requestedPackages) {
   } else {
     // Auto-scan: check all packages for changes since last publish tag
     for (const name of ALL_PACKAGES) {
-      const dir = pkgDir(name)
-      try {
-        fs.statSync(dir)
-      } catch {
-        continue
-      }
+      if (!packageExistsLocally(name)) continue
 
       const localVersion = getLocalVersion(name)
       const npmVersion = getNpmVersion(name)

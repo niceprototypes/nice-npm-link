@@ -77,9 +77,9 @@ function validateEntry(entry, tierIndex) {
 function readRegistry() {
   const raw = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
 
-  for (let t = 0; t < raw.tiers.length; t++) {
-    for (const entry of raw.tiers[t]) {
-      validateEntry(entry, t);
+  for (let tierIndex = 0; tierIndex < raw.tiers.length; tierIndex++) {
+    for (const entry of raw.tiers[tierIndex]) {
+      validateEntry(entry, tierIndex);
     }
   }
 
@@ -116,6 +116,24 @@ function getPackageNames() {
  */
 function getTiers() {
   return readRegistry().tiers.map(tier => tier.map(e => e.name));
+}
+
+/**
+ * Returns a Map from package name → tier index, derived from the
+ * registry tiers. O(1) tier lookup for callers that group or sort by
+ * tier (e.g. publisher/display.js).
+ *
+ * @returns {Map<string, number>}
+ */
+function getTierIndexMap() {
+  const tierIndexByName = new Map();
+  const tiers = readRegistry().tiers;
+  for (let tierIndex = 0; tierIndex < tiers.length; tierIndex++) {
+    for (const entry of tiers[tierIndex]) {
+      tierIndexByName.set(entry.name, tierIndex);
+    }
+  }
+  return tierIndexByName;
 }
 
 /**
@@ -253,6 +271,7 @@ module.exports = {
   getAllPackages,
   getPackageNames,
   getTiers,
+  getTierIndexMap,
   getByType,
   getByGroup,
   getLinkedPackageMap,

@@ -17,7 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { findAllLinkedPackages } = require('./discovery');
-const { removeFile } = require('./fs-utils');
+const { removeFile, getPackageName } = require('./fs-utils');
 const { log, info, success, warn, cyan, gray } = require('./logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -145,23 +145,6 @@ function ensureTriggerFile(projectDir) {
 // ──────────────────────────────────────────────────────────────────────────────
 // Package Watcher
 // ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Gets the package name from its directory
- *
- * @param {string} pkgPath - Absolute path to package
- * @returns {string} Package name or directory basename
- */
-function getPackageName(pkgPath) {
-  try {
-    const pkgJson = JSON.parse(
-      fs.readFileSync(path.join(pkgPath, 'package.json'), 'utf-8')
-    );
-    return pkgJson.name || path.basename(pkgPath);
-  } catch {
-    return path.basename(pkgPath);
-  }
-}
 
 /**
  * Watches a single package's dist folder

@@ -12,6 +12,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { findAllLinkedPackages } = require('./discovery');
+const { getPackageName } = require('./fs-utils');
 const { log, info, success, warn, cyan, gray } = require('./logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -36,23 +37,6 @@ const RESET = '\x1b[0m';
 // ──────────────────────────────────────────────────────────────────────────────
 // Utilities
 // ──────────────────────────────────────────────────────────────────────────────
-
-/**
- * Gets the package name from its directory
- *
- * @param {string} pkgPath - Absolute path to package
- * @returns {string} Package name or directory basename
- */
-function getPackageName(pkgPath) {
-  try {
-    const pkgJson = JSON.parse(
-      fs.readFileSync(path.join(pkgPath, 'package.json'), 'utf-8')
-    );
-    return pkgJson.name || path.basename(pkgPath);
-  } catch {
-    return path.basename(pkgPath);
-  }
-}
 
 /**
  * Checks if a package has a dev script
@@ -204,6 +188,5 @@ function startDevRunner(projectDir, options = {}) {
 
 module.exports = {
   startDevRunner,
-  getPackageName,
   hasDevScript,
 };

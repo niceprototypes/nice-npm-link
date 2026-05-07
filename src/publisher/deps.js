@@ -14,7 +14,7 @@ const { pkgDir, getLocalVersion } = require('./helpers');
  * @param {string} name - Package name
  * @returns {Object<string, string>} Original dependency values (file: refs)
  */
-function swapFileDepsTfSemver(name) {
+function swapFileDepsToSemver(name) {
   const pkgPath = path.join(pkgDir(name), 'package.json');
   const pkg = readJSON(pkgPath, { useCache: false });
   const originals = {};
@@ -45,7 +45,7 @@ function swapFileDepsTfSemver(name) {
  * Restores file: deps after publishing
  *
  * @param {string} name - Package name
- * @param {Object<string, string>} originals - Original dependency values from swapFileDepsTfSemver
+ * @param {Object<string, string>} originals - Original dependency values from swapFileDepsToSemver
  */
 function restoreFileDeps(name, originals) {
   if (Object.keys(originals).length === 0) return;
@@ -65,6 +65,6 @@ function restoreFileDeps(name, originals) {
 }
 
 module.exports = {
-  swapFileDepsTfSemver,
+  swapFileDepsToSemver,
   restoreFileDeps,
 };

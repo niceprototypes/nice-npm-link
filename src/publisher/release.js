@@ -13,7 +13,7 @@
  */
 
 const { log, info, success, warn, fail, cyan } = require("../logger")
-const { run, pkgDir } = require("./helpers")
+const { runShell, pkgDir } = require("./helpers")
 const { createOtpManager, isOtpError } = require("./otp")
 
 const MAX_OTP_RETRIES = 3
@@ -41,8 +41,8 @@ async function releasePackages(publishable, doPublish) {
 
   const otp = createOtpManager()
 
-  for (let i = 0; i < publishable.length; i++) {
-    const p = publishable[i]
+  for (let pkgIndex = 0; pkgIndex < publishable.length; pkgIndex++) {
+    const p = publishable[pkgIndex]
     const dir = pkgDir(p.name)
     let attempts = 0
     let didPublish = false
@@ -53,7 +53,7 @@ async function releasePackages(publishable, doPublish) {
 
       try {
         // --ignore-scripts skips rebuild — packages are already built in build phase
-        run(`npm publish --otp=${code} --ignore-scripts --access public`, { cwd: dir })
+        runShell(`npm publish --otp=${code} --ignore-scripts --access public`, { cwd: dir })
         published.push(p.name)
         success(`Published ${p.name}@${p.newVersion}`)
         didPublish = true
@@ -70,7 +70,7 @@ async function releasePackages(publishable, doPublish) {
             // Auth state is broken — skip remaining packages
             fail(`OTP failed ${MAX_OTP_RETRIES} times for ${p.name}. Stopping publish phase.`)
             failed.push(p.name)
-            const remaining = publishable.slice(i + 1)
+            const remaining = publishable.slice(pkgIndex + 1)
             for (const r of remaining) {
               warn(`Skipped ${r.name} (publish phase halted)`)
               failed.push(r.name)

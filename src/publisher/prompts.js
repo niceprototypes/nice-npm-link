@@ -119,26 +119,26 @@ function renderTable(enriched, decisions, currentIdx) {
     `Last entry`
   info(gray(header))
 
-  for (let i = 0; i < enriched.length; i++) {
-    const c = enriched[i]
-    const d = decisions.get(c.name)
-    const isCurrent = i === currentIdx
+  for (let rowIndex = 0; rowIndex < enriched.length; rowIndex++) {
+    const candidate = enriched[rowIndex]
+    const decision = decisions.get(candidate.name)
+    const isCurrent = rowIndex === currentIdx
 
     // Arrow marker + yellow name for the row currently being prompted.
     const prefix = isCurrent ? yellow("▶ ") : "  "
-    const name = (isCurrent ? yellow : cyan)(c.name.padEnd(COL_NAME))
+    const name = (isCurrent ? yellow : cyan)(candidate.name.padEnd(COL_NAME))
 
     // `chosen` is whatever the row will publish at: the user's accepted
     // decision if present, otherwise the file-derived recommendation. This
     // lets accepted rows display their final version even after the cursor
     // has moved past them.
-    const chosen = d && d.status === "accepted" ? d.bumpType : recommendedLevel(c)
-    const next = derivedVersion(c, chosen)
+    const chosen = decision && decision.status === "accepted" ? decision.bumpType : recommendedLevel(candidate)
+    const next = derivedVersion(candidate, chosen)
     // New packages render `1.0.0 (new)` — no arrow, no level tag, since
     // there is no prior version to bump from.
-    const versionText = c.isNew ? `${c.localVersion} (new)` : `${c.localVersion} → ${next}`
+    const versionText = candidate.isNew ? `${candidate.localVersion} (new)` : `${candidate.localVersion} → ${next}`
     const version = versionText.padEnd(COL_VERSION)
-    const levelTag = (c.isNew ? "" : `(${chosen})`).padEnd(COL_LEVEL)
+    const levelTag = (candidate.isNew ? "" : `(${chosen})`).padEnd(COL_LEVEL)
 
     // Status column — three mutually exclusive shapes, padded to a uniform
     // visible width before color is applied so trailing columns line up:
@@ -146,21 +146,21 @@ function renderTable(enriched, decisions, currentIdx) {
     //   pending + has intent  → gray "{n} entries" hint
     //   pending + no intent   → blank (recommendation defaulted to patch)
     let status
-    if (d && d.status === "accepted") {
+    if (decision && decision.status === "accepted") {
       status = green(`✓ ${next}`.padEnd(COL_STATUS))
     } else {
-      const count = c.intentEntries.length
-      const text = c.intentLevel
+      const count = candidate.intentEntries.length
+      const text = candidate.intentLevel
         ? `${count} ${count === 1 ? "entry" : "entries"}`
         : ""
-      status = c.intentLevel ? gray(text.padEnd(COL_STATUS)) : text.padEnd(COL_STATUS)
+      status = candidate.intentLevel ? gray(text.padEnd(COL_STATUS)) : text.padEnd(COL_STATUS)
     }
 
     // Last entry timestamp. Entries are file-order (oldest first) so the
     // newest is the last element. Empty string for new packages and any
     // package whose `.nice/bump.md` has no parsed entries — keeps the
     // column visually clean rather than printing a placeholder.
-    const lastEntry = c.intentEntries[c.intentEntries.length - 1]
+    const lastEntry = candidate.intentEntries[candidate.intentEntries.length - 1]
     const lastDate = lastEntry?.timestamp || ""
 
     info(`${prefix}${name} ${version} ${levelTag} ${status} ${gray(lastDate)}`)

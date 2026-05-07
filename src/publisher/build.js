@@ -10,8 +10,8 @@
 const path = require("path")
 const { readJSON } = require("../fs-utils")
 const { info, fail, cyan } = require("../logger")
-const { run, pkgDir } = require("./helpers")
-const { swapFileDepsTfSemver } = require("./deps")
+const { runShell, pkgDir } = require("./helpers")
+const { swapFileDepsToSemver } = require("./deps")
 
 /**
  * Builds all packages and swaps their file: deps to semver ranges.
@@ -37,7 +37,7 @@ function buildPackages(toPublish) {
       // Only run build if the package has a build script
       if (pkg.scripts && pkg.scripts.build) {
         info(`Building ${cyan(p.name)}...`)
-        run("npm run build", { cwd: dir })
+        runShell("npm run build", { cwd: dir })
       }
     } catch (e) {
       fail(`Build failed for ${p.name}: ${e.message}`)
@@ -46,7 +46,7 @@ function buildPackages(toPublish) {
     }
 
     // Swap file: deps to semver for npm publish
-    const originals = swapFileDepsTfSemver(p.name)
+    const originals = swapFileDepsToSemver(p.name)
     swappedDeps.set(p.name, originals)
   }
 

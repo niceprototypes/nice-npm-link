@@ -9,7 +9,7 @@
 
 const { log, info, success, warn, fail } = require("../logger")
 const { removeFile } = require("../fs-utils")
-const { run, pkgDir, getLocalVersion } = require("./helpers")
+const { runShell, pkgDir, getLocalVersion } = require("./helpers")
 const { restoreFileDeps } = require("./deps")
 const { clearBumpIntent, readBumpIntent, composeCommitMessage } = require("../bump")
 
@@ -68,16 +68,16 @@ function commitAndTag(published) {
       const tmpFile = path.join(dir, ".git", "COMMIT_EDITMSG_NTK")
       fs.writeFileSync(tmpFile, commitMessage)
       try {
-        run(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
+        runShell(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
       } finally {
         try { removeFile(tmpFile) } catch { /* best-effort cleanup */ }
       }
 
       // Tag the publish commit for future change detection
-      run(`cd "${dir}" && git tag "${tag}"`)
+      runShell(`cd "${dir}" && git tag "${tag}"`)
 
       // Push commit and tag together
-      run(`cd "${dir}" && git push origin main --tags 2>/dev/null`)
+      runShell(`cd "${dir}" && git push origin main --tags 2>/dev/null`)
       info(`Pushed ${name}@${version} (tagged ${tag})`)
     } catch {
       warn(`Could not commit/push ${name} — commit manually`)

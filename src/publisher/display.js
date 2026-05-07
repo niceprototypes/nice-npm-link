@@ -1,99 +1,165 @@
 /**
- * @fileoverview Candidate display formatting
+ * @fileoverview Candidate display formatting.
  *
- * Prints discovered package candidates grouped by publish tier,
- * with aligned columns. Package name color signals readiness:
- * - Green: all changes committed, ready to publish
- * - Yellow: has uncommitted changes, needs attention
+ * Prints package candidates discovered by the publisher scan, grouped by
+ * publish tier with aligned columns. The package name color is the
+ * readiness signal:
+ *
+ * - Green name → working tree clean, ready to publish
+ * - Yellow name → uncommitted changes, needs attention
+ *
+ * Sample output (with colors stripped):
+ *
+ *     ── Tier 0 ──
+ *     nice-styles    6.0.2 → 6.0.3   committed
+ *     nice-icons     1.1.0 → 1.1.0
+ *
+ *     ── Tier 1 ──
+ *     nice-react-styles  4.0.3 → 4.0.4   2 uncommitted
+ *
+ *     ── Tier 2 ──
+ *     nice-react-flex    2.1.0 → 2.1.1   committed (dependent)
  *
  * @module publisher/display
  */
 
 const { cyan, gray, green, yellow } = require("../logger")
-const { PUBLISH_TIERS } = require("./constants")
+const { getTierIndexMap } = require("../registry")
 
 /**
- * Pads a string to a fixed width.
- * ANSI escape codes are excluded from the width calculation
- * so colored strings align correctly.
- *
- * @param {string} str - String to pad (may contain ANSI codes)
- * @param {number} width - Target visible width
- * @returns {string} Padded string
+ * Fallback tier for candidates whose name is not in the registry.
+ * Chosen high enough to sort below every real tier so unknown packages
+ * still render but at the bottom.
  */
-function pad(str, width) {
-  // Strip ANSI codes to measure visible length
-  const visible = str.replace(/\x1b\[\d+m/g, "")
-  const diff = width - visible.length
-  return diff > 0 ? str + " ".repeat(diff) : str
+const UNKNOWN_TIER_INDEX = 99
+
+/**
+ * Matches a single ANSI SGR escape sequence (e.g. `\x1b[31m`, `\x1b[0m`).
+ * Used to strip color codes when measuring visible string width.
+ */
+const ANSI_SGR_PATTERN = /\x1b\[\d+m/g
+
+/**
+ * @typedef {object} Candidate
+ * @property {string} name - Package name (e.g. `"nice-react-button"`)
+ * @property {string} npmVersion - Version currently published to npm; empty string when unpublished
+ * @property {string} localVersion - Version in the local `package.json`
+ * @property {boolean} isNew - True when the package has never been published
+ * @property {boolean} isDependent - True when this candidate was added by reverse-dependency resolution (not by a direct source change)
+ * @property {number} dirty - Count of uncommitted files in the working tree (0 = clean)
+ */
+
+/**
+ * Pads a string with trailing spaces to a target *visible* width.
+ *
+ * Counts only printable characters, not ANSI color escapes, so a colored
+ * string aligns with an uncolored string of the same visible text.
+ *
+ * @param {string} text - May contain ANSI escapes
+ * @param {number} visibleWidth - Target column width measured in printable chars
+ * @returns {string} `text` plus enough trailing spaces to reach `visibleWidth`, or `text` unchanged if it already meets/exceeds the width
+ */
+function padVisible(text, visibleWidth) {
+  const visibleText = text.replace(ANSI_SGR_PATTERN, "")
+  const padding = visibleWidth - visibleText.length
+  return padding > 0 ? text + " ".repeat(padding) : text
 }
 
 /**
- * Prints candidates grouped by their publish tier with aligned columns.
+ * Renders a candidate's version column text.
  *
- * Package name color indicates readiness:
- * - Green name: all changes committed, ready to publish
- * - Yellow name: uncommitted changes exist, needs attention
+ * @param {Candidate} candidate
+ * @param {object} [options]
+ * @param {boolean} [options.colorize=false] - When true, wraps the local version in cyan
+ * @returns {string} `"New"` for unpublished packages, otherwise `"{npm} → {local}"`
+ */
+function formatVersionCell(candidate, { colorize = false } = {}) {
+  if (candidate.isNew) return "New"
+  const local = colorize ? cyan(candidate.localVersion) : candidate.localVersion
+  return `${candidate.npmVersion} → ${local}`
+}
+
+/**
+ * Groups candidates by their publish tier. Candidates whose name is not
+ * in the registry land in `UNKNOWN_TIER_INDEX` so they still render.
  *
- * Additional columns:
- * - Version: "New" or npm → local
- * - Uncommitted count (yellow, only shown when > 0)
- * - Dependent tag (gray, for graph-resolved packages)
+ * @param {Candidate[]} candidates
+ * @returns {Map<number, Candidate[]>} Tier index → candidates in input order
+ */
+function groupCandidatesByTier(candidates) {
+  const tierIndexByName = getTierIndexMap()
+  const candidatesByTier = new Map()
+  for (const candidate of candidates) {
+    const tierIndex = tierIndexByName.get(candidate.name) ?? UNKNOWN_TIER_INDEX
+    if (!candidatesByTier.has(tierIndex)) {
+      candidatesByTier.set(tierIndex, [])
+    }
+    candidatesByTier.get(tierIndex).push(candidate)
+  }
+  return candidatesByTier
+}
+
+/**
+ * Prints discovered candidates to stdout, grouped by publish tier with
+ * aligned columns.
  *
- * @param {object[]} candidates - Package candidate objects from scan
+ * Row layout:
+ *
+ *     {name}  {version}  {status}{dependent}
+ *
+ * Column rules:
+ * - **name**: green when working tree is clean, yellow when dirty
+ * - **version**: `"New"` (yellow) for unpublished packages, otherwise
+ *   `"{npm} → {local}"` with the local part in cyan
+ * - **status**: `"{n} uncommitted"` (yellow) when there are uncommitted
+ *   files, `"committed"` (green) when the local version has moved past
+ *   the published version, empty otherwise
+ * - **dependent**: `" (dependent)"` (gray) when the candidate was pulled
+ *   in by reverse-dependency resolution
+ *
+ * @param {Candidate[]} candidates - Output of the publisher scan
+ * @returns {void}
  */
 function displayCandidates(candidates) {
-  // Compute column widths from data for alignment
-  const maxName = Math.max(...candidates.map(c => c.name.length))
-  const maxVersion = Math.max(...candidates.map(c => {
-    if (c.isNew) return 3 // "New"
-    return `${c.npmVersion} → ${c.localVersion}`.length
-  }))
+  // Column widths derived from the data so every row aligns regardless
+  // of name/version length variance.
+  const nameColumnWidth = Math.max(...candidates.map(c => c.name.length))
+  const versionColumnWidth = Math.max(
+    ...candidates.map(c => formatVersionCell(c).length)
+  )
 
-  // Build tier lookup: package name → tier index
-  const tierMap = new Map()
-  for (let t = 0; t < PUBLISH_TIERS.length; t++) {
-    for (const name of PUBLISH_TIERS[t]) {
-      tierMap.set(name, t)
-    }
-  }
+  const candidatesByTier = groupCandidatesByTier(candidates)
+  const sortedTiers = [...candidatesByTier.entries()].sort(
+    ([a], [b]) => a - b
+  )
 
-  // Group candidates by tier, preserving tier order
-  const byTier = new Map()
-  for (const c of candidates) {
-    const tier = tierMap.get(c.name) ?? 99
-    if (!byTier.has(tier)) byTier.set(tier, [])
-    byTier.get(tier).push(c)
-  }
+  for (const [tierIndex, tierCandidates] of sortedTiers) {
+    console.log(`  ${gray(`── Tier ${tierIndex} ──`)}`)
 
-  for (const [tier, pkgs] of [...byTier.entries()].sort((a, b) => a[0] - b[0])) {
-    const label = `Tier ${tier}`
-    console.log(`  ${gray(`── ${label} ──`)}`)
-    for (const c of pkgs) {
-      // Name color signals readiness — green if clean, yellow if uncommitted
-      const nameColor = c.dirty > 0 ? yellow : green
-      const name = pad(nameColor(c.name), maxName)
+    for (const candidate of tierCandidates) {
+      const hasUncommittedChanges = candidate.dirty > 0
+      const hasVersionBumped = candidate.localVersion !== candidate.npmVersion
 
-      // Version column
-      const versionRaw = c.isNew
-        ? "New"
-        : `${c.npmVersion} → ${c.localVersion}`
-      const version = c.isNew
-        ? pad(yellow(versionRaw), maxVersion)
-        : pad(`${c.npmVersion} → ${cyan(c.localVersion)}`, maxVersion)
+      // Name color is the readiness signal: green = ready, yellow = blocked.
+      const colorizeName = hasUncommittedChanges ? yellow : green
+      const nameCell = padVisible(colorizeName(candidate.name), nameColumnWidth)
 
-      // Status column — show state only when version has changed
-      const versionChanged = c.localVersion !== c.npmVersion
-      let status = ""
-      if (c.dirty > 0) {
-        status = yellow(`${c.dirty} uncommitted`)
-      } else if (versionChanged) {
-        status = green("committed")
+      const versionCell = candidate.isNew
+        ? padVisible(yellow(formatVersionCell(candidate)), versionColumnWidth)
+        : padVisible(formatVersionCell(candidate, { colorize: true }), versionColumnWidth)
+
+      // Status is only meaningful when something has actually changed
+      // since the last publish — otherwise leave the column blank.
+      let statusCell = ""
+      if (hasUncommittedChanges) {
+        statusCell = yellow(`${candidate.dirty} uncommitted`)
+      } else if (hasVersionBumped) {
+        statusCell = green("committed")
       }
 
-      const dependent = c.isDependent ? gray(" (dependent)") : ""
+      const dependentTag = candidate.isDependent ? gray(" (dependent)") : ""
 
-      console.log(`  ${name}  ${version}  ${status}${dependent}`)
+      console.log(`  ${nameCell}  ${versionCell}  ${statusCell}${dependentTag}`)
     }
     console.log("")
   }
