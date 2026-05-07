@@ -17,6 +17,7 @@
 const fs = require('fs');
 const path = require('path');
 const { findAllLinkedPackages } = require('./discovery');
+const { removeFile } = require('./fs-utils');
 const { log, info, success, warn, cyan, gray } = require('./logger');
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -313,7 +314,7 @@ function cleanupTriggerFile(projectDir) {
   const triggerPath = getTriggerFilePath(projectDir);
 
   if (fs.existsSync(triggerPath)) {
-    fs.unlinkSync(triggerPath);
+    removeFile(triggerPath);
     info(`Removed trigger file: ${TRIGGER_FILE_NAME}`);
   }
 }

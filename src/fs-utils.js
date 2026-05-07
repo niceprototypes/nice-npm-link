@@ -147,6 +147,22 @@ function removePath(targetPath) {
 }
 
 /**
+ * Removes a single file
+ *
+ * Idempotent — missing files are not an error. Use removePath for
+ * directories.
+ *
+ * @param {string} filePath - File path to remove
+ * @returns {void}
+ *
+ * @example
+ * removeFile('/project/.symlink-trigger.js');
+ */
+function removeFile(filePath) {
+  fs.rmSync(filePath, { force: true });
+}
+
+/**
  * Creates a directory and all parent directories if they don't exist
  *
  * Equivalent to `mkdir -p` on Unix systems.
@@ -194,6 +210,7 @@ module.exports = {
   // Path operations
   pathExists,
   removePath,
+  removeFile,
   ensureDir,
   readDir,
   removeEmptyDir,

@@ -8,6 +8,7 @@
  */
 
 const { log, info, success, warn, fail } = require("../logger")
+const { removeFile } = require("../fs-utils")
 const { run, pkgDir, getLocalVersion } = require("./helpers")
 const { restoreFileDeps } = require("./deps")
 const { clearBumpIntent, readBumpIntent, composeCommitMessage } = require("../bump")
@@ -69,7 +70,7 @@ function commitAndTag(published) {
       try {
         run(`cd "${dir}" && git add -A && git commit -F "${tmpFile}" 2>/dev/null`)
       } finally {
-        try { fs.unlinkSync(tmpFile) } catch { /* best-effort cleanup */ }
+        try { removeFile(tmpFile) } catch { /* best-effort cleanup */ }
       }
 
       // Tag the publish commit for future change detection
