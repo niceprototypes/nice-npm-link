@@ -26,6 +26,7 @@ const { findAllLinkedPackages, readPkgName, validatePackageDir } = require('./li
 const { ensurePeerDeps } = require('./linking/peer-deps');
 const { removeConflictsInDir, cleanAllLinkedPackages } = require('./linking/cleaner');
 const { cleanAllCaches } = require('./linking/cache-cleaner');
+const { buildAllPackages } = require('./linking/dist-builder');
 const { readRegistry } = require('./shared/registry/read');
 const { linkPackage, unlinkPackages } = require('./linking/linker');
 const { startWatching, TRIGGER_FILE_NAME } = require('./linking/watcher');
@@ -315,6 +316,11 @@ function main() {
     const baseDir = registry.basePath.replace('~', os.homedir());
     cleanAllCaches(baseDir, { dryRun: options.dryRun });
     process.exit(0);
+  }
+
+  if (options.buildAll) {
+    const result = buildAllPackages({ dryRun: options.dryRun });
+    process.exit(result.failed.length > 0 ? 1 : 0);
   }
 
   if (options.cleanOnly) {

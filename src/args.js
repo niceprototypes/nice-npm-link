@@ -147,6 +147,7 @@ Options:
   --clean-all                ${cyan('Recursively')} clean ALL linked packages in current project
   --clean-only <path>        Only clean conflicts in the specified linked package
   --clean-caches             ${cyan('Wipe')} webpack and Vite caches across every consumer project in the workspace
+  --build-all                ${cyan('Rebuild')} every linked nice-* package's dist in registry tier order
   --unlink                   Restore npm packages to their original versions
   --dev                      ${cyan('Run')} dev scripts in all linked packages (rebuilds on change)
   --watch                    ${cyan('Watch')} linked package dist folders and trigger reload on change
@@ -269,6 +270,7 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
     cleanAll: hasFlag(args, '--clean-all'),
     cleanOnly: hasFlag(args, '--clean-only'),
     cleanCaches: hasFlag(args, '--clean-caches'),
+    buildAll: hasFlag(args, '--build-all'),
     unlink: hasFlag(args, '--unlink'),
     dev: hasFlag(args, '--dev'),
     watch: hasFlag(args, '--watch'),
