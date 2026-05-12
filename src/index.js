@@ -314,7 +314,7 @@ function main() {
   if (options.cleanCaches) {
     const registry = readRegistry();
     const baseDir = registry.basePath.replace('~', os.homedir());
-    cleanAllCaches(baseDir, { dryRun: options.dryRun });
+    cleanAllCaches(baseDir, { dryRun: options.dryRun, killPorts: !options.noKill });
     process.exit(0);
   }
 

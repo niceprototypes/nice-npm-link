@@ -146,7 +146,8 @@ Usage:
 Options:
   --clean-all                ${cyan('Recursively')} clean ALL linked packages in current project
   --clean-only <path>        Only clean conflicts in the specified linked package
-  --clean-caches             ${cyan('Wipe')} webpack and Vite caches across every consumer project in the workspace
+  --clean-caches             ${cyan('Kill')} dev-server ports + wipe webpack/Vite caches across every consumer
+  --no-kill                  Used with ${cyan('--clean-caches')} to skip the port-kill phase (caches only)
   --build-all                ${cyan('Rebuild')} every linked nice-* package's dist in registry tier order
   --unlink                   Restore npm packages to their original versions
   --dev                      ${cyan('Run')} dev scripts in all linked packages (rebuilds on change)
@@ -270,6 +271,7 @@ function parseArgs(args, { conflictingPackages, pm: defaultPM }) {
     cleanAll: hasFlag(args, '--clean-all'),
     cleanOnly: hasFlag(args, '--clean-only'),
     cleanCaches: hasFlag(args, '--clean-caches'),
+    noKill: hasFlag(args, '--no-kill'),
     buildAll: hasFlag(args, '--build-all'),
     unlink: hasFlag(args, '--unlink'),
     dev: hasFlag(args, '--dev'),
