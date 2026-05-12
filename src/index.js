@@ -16,6 +16,7 @@
  */
 
 const path = require('path');
+const os = require('os');
 const { DEFAULT_CONFLICTING_PACKAGES, PEER_ENFORCE } = require('./shared/config');
 const { log, info, success, warn, fail, cyan, gray } = require('./shared/logger');
 const { showUsage, parseArgs } = require('./args');
@@ -24,6 +25,8 @@ const { pathExists, readJSON } = require('./shared/fs-utils');
 const { findAllLinkedPackages, readPkgName, validatePackageDir } = require('./linking/discovery');
 const { ensurePeerDeps } = require('./linking/peer-deps');
 const { removeConflictsInDir, cleanAllLinkedPackages } = require('./linking/cleaner');
+const { cleanAllCaches } = require('./linking/cache-cleaner');
+const { readRegistry } = require('./shared/registry/read');
 const { linkPackage, unlinkPackages } = require('./linking/linker');
 const { startWatching, TRIGGER_FILE_NAME } = require('./linking/watcher');
 const { startDevRunner } = require('./linking/dev-runner');
@@ -304,6 +307,13 @@ function main() {
       skipPeerCheck: options.skipPeerCheck,
       peerEnforce: PEER_ENFORCE,
     });
+    process.exit(0);
+  }
+
+  if (options.cleanCaches) {
+    const registry = readRegistry();
+    const baseDir = registry.basePath.replace('~', os.homedir());
+    cleanAllCaches(baseDir, { dryRun: options.dryRun });
     process.exit(0);
   }
 
