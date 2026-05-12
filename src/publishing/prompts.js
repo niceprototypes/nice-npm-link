@@ -16,11 +16,21 @@
  * Accepted rows replace their entry-count tag with a green ✓ + derived
  * version. Dependents (auto-patched) are never part of this walk.
  *
+ * **No-intent gate.** Existing packages that have changes but no entries
+ * in `.nice/bump.md` cannot be auto-accepted. The Level column shows
+ * `(manual)` and the Status column shows a yellow `! no bump notes`
+ * warning. `[1] Accept current` and `[3] Accept remaining` refuse to
+ * auto-apply a level for these rows — the user must use `[2] Edit
+ * current` to pick a level explicitly. This prevents silently shipping a
+ * major-impact refactor under a patch bump just because nobody recorded
+ * intent.
+ *
  * Input: digits `1`–`5` and the letter aliases `a` (accept), `e` (edit),
  * `r` (remaining), `v` (view), `c` (cancel) are all accepted at the main
  * menu. Pressing Enter at the main menu is equivalent to `[1] Accept
  * current`. The inner edit prompt accepts `p` / `m` / `M` / `s`, with
- * Enter falling back to the recommended level.
+ * Enter falling back to the recommended level (or, when no intent is
+ * recorded, to skip).
  *
  * @module publisher/prompts
  *
@@ -58,16 +68,30 @@ function enrichWithIntent(candidates) {
  * Default bump level for a candidate.
  *
  * New packages have no prior version, so no bump applies — they ship at
- * `localVersion` and are tagged `as-is`. Existing packages prefer the level
- * recorded in `.nice/bump.md`; if none is recorded, fall back to `patch` so
- * a publish is never blocked by a missing intent file.
+ * `localVersion` and are tagged `as-is`. Existing packages prefer the
+ * level recorded in `.nice/bump.md`. When no entry is recorded this
+ * returns `null` — `[1]`/`[3]` refuse to auto-accept and the user must
+ * use `[2] Edit current` to pick a level explicitly. Falling back to
+ * `patch` would silently understate breaking changes whose intent was
+ * never written down.
  *
  * @param {object} c
- * @returns {"major"|"minor"|"patch"|"as-is"}
+ * @returns {"major"|"minor"|"patch"|"as-is"|null}
  */
 function recommendedLevel(c) {
   if (c.isNew) return "as-is"
-  return c.intentLevel || "patch"
+  return c.intentLevel || null
+}
+
+/**
+ * True when the candidate has changes but no recorded bump intent and is
+ * not a brand-new package. These rows are blocked from auto-acceptance.
+ *
+ * @param {object} c
+ * @returns {boolean}
+ */
+function requiresManualLevel(c) {
+  return !c.isNew && !c.intentLevel
 }
 
 /**
@@ -129,25 +153,32 @@ function renderTable(enriched, decisions, currentIdx) {
     const name = (isCurrent ? yellow : cyan)(candidate.name.padEnd(COL_NAME))
 
     // `chosen` is whatever the row will publish at: the user's accepted
-    // decision if present, otherwise the file-derived recommendation. This
-    // lets accepted rows display their final version even after the cursor
-    // has moved past them.
+    // decision if present, otherwise the file-derived recommendation. May
+    // be null when the candidate has changes but no recorded intent — in
+    // that case the Level column shows `(manual)` and the Version column
+    // shows a `?` placeholder until the user picks a level via [2].
     const chosen = decision && decision.status === "accepted" ? decision.bumpType : recommendedLevel(candidate)
-    const next = derivedVersion(candidate, chosen)
+    const next = chosen ? derivedVersion(candidate, chosen) : null
     // New packages render `1.0.0 (new)` — no arrow, no level tag, since
-    // there is no prior version to bump from.
-    const versionText = candidate.isNew ? `${candidate.localVersion} (new)` : `${candidate.localVersion} → ${next}`
+    // there is no prior version to bump from. No-intent rows render
+    // `1.0.0 → ?` to make the unresolved state visible at a glance.
+    const versionText = candidate.isNew
+      ? `${candidate.localVersion} (new)`
+      : `${candidate.localVersion} → ${next || "?"}`
     const version = versionText.padEnd(COL_VERSION)
-    const levelTag = (candidate.isNew ? "" : `(${chosen})`).padEnd(COL_LEVEL)
+    const levelTag = (candidate.isNew ? "" : chosen ? `(${chosen})` : "(manual)").padEnd(COL_LEVEL)
 
-    // Status column — three mutually exclusive shapes, padded to a uniform
+    // Status column — four mutually exclusive shapes, padded to a uniform
     // visible width before color is applied so trailing columns line up:
     //   accepted              → green check + resolved version
     //   pending + has intent  → gray "{n} entries" hint
-    //   pending + no intent   → blank (recommendation defaulted to patch)
+    //   pending + no intent   → yellow "! no bump notes" warning (manual input required)
+    //   new package           → blank
     let status
     if (decision && decision.status === "accepted") {
       status = green(`✓ ${next}`.padEnd(COL_STATUS))
+    } else if (requiresManualLevel(candidate)) {
+      status = yellow("! no bump notes".padEnd(COL_STATUS))
     } else {
       const count = candidate.intentEntries.length
       const text = candidate.intentLevel
@@ -193,15 +224,20 @@ async function promptEditLevel(c) {
     return "as-is"
   }
   const rec = recommendedLevel(c)
-  const answer = (await promptKey(
-    `  ${cyan(c.name)} — [p]atch / [m]inor / [M]ajor / [s]kip (rec: ${cyan(rec)}): `,
-    ["p", "m", "M", "s"]
-  )).trim()
+  // No-intent rows have no recommendation. The prompt advertises the
+  // missing-notes state so the user knows why no `(rec: …)` hint is
+  // shown, and pressing Enter falls through to skip rather than to a
+  // silent patch.
+  const promptText = rec
+    ? `  ${cyan(c.name)} — [p]atch / [m]inor / [M]ajor / [s]kip (rec: ${cyan(rec)}): `
+    : `  ${cyan(c.name)} — ${yellow("no bump notes")} — [p]atch / [m]inor / [M]ajor / [s]kip: `
+  const answer = (await promptKey(promptText, ["p", "m", "M", "s"])).trim()
   // `M` (capital) is intentional — `m` would be ambiguous with minor.
   if (answer === "M") return "major"
   switch (answer) {
-    // Enter / empty answer falls back to the recommendation, matching the
-    // main menu's `[1] Accept current` shortcut behavior.
+    // Enter / empty answer falls back to the recommendation when one
+    // exists, or to skip when the row has no recorded intent. Either way
+    // the publish workflow never auto-bumps a no-intent row on Enter.
     case "": return rec
     case "p": return "patch"
     case "m": return "minor"
@@ -272,13 +308,28 @@ async function promptVersionBumps(changedCandidates, dependentCandidates) {
     // [3] / r — accept the current row and every subsequent pending row at
     // their recommended levels in one shot. Already-accepted rows (reached
     // via earlier [2] backtracking, hypothetically) are skipped so a
-    // user-edited level is never overwritten. `currentIdx` is jumped to the
-    // end and the loop is broken — no more prompts will fire.
+    // user-edited level is never overwritten. No-intent rows are also
+    // skipped — they require [2] to pick a level explicitly. If any were
+    // skipped the cursor jumps to the first one so the user can address
+    // it; otherwise the loop terminates as before.
     if (action === "3" || action.toLowerCase() === "r") {
+      const skipped = []
       for (let i = currentIdx; i < enriched.length; i++) {
         const c = enriched[i]
         if (decisions.get(c.name).status === "accepted") continue
+        if (requiresManualLevel(c)) {
+          skipped.push(c)
+          continue
+        }
         decisions.set(c.name, { status: "accepted", bumpType: recommendedLevel(c) })
+      }
+      if (skipped.length > 0) {
+        warn(
+          `${skipped.length} package(s) skipped (no bump notes): ${skipped.map((c) => c.name).join(", ")}`
+        )
+        info("Use [2] Edit current to choose a level for each.")
+        currentIdx = enriched.indexOf(skipped[0])
+        continue
       }
       currentIdx = enriched.length
       // Final render with no current row highlighted (-1) so the user sees
@@ -300,8 +351,15 @@ async function promptVersionBumps(changedCandidates, dependentCandidates) {
 
     // [1] / Enter / a — accept the recommendation and advance. Empty input
     // is treated as `[1]` here, so the most common path (Enter through a
-    // batch) requires zero modifier keys.
+    // batch) requires zero modifier keys. No-intent rows are refused —
+    // the user must pick a level explicitly via [2].
     if (action === "1" || action === "" || action.toLowerCase() === "a") {
+      if (requiresManualLevel(current)) {
+        warn(
+          `${current.name} has no bump notes in .nice/bump.md. Use [2] Edit current to pick a level.`
+        )
+        continue
+      }
       decisions.set(current.name, { status: "accepted", bumpType: recommendedLevel(current) })
       currentIdx++
       continue
