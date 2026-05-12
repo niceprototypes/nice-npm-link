@@ -6,7 +6,7 @@
  * - package.js   — packageJson, packageExportsJson, srcIndex
  * - config.js    — tsconfigJson, rollupConfig
  * - component.js — componentFile, typesFile, stylesFile, componentIndex
- * - tokens.js    — getTokenFile, stylesComponentFile, tokensIndex
+ * - tokens.js    — getReactTokenFile, stylesComponentFile, tokensIndex
  *
  * @module creator/templates
  */
@@ -21,7 +21,7 @@ const {
   componentIndex,
 } = require('./component');
 const {
-  getTokenFile,
+  getReactTokenFile,
   stylesComponentFile,
   tokensIndex,
 } = require('./tokens');
@@ -38,7 +38,7 @@ module.exports = {
   typesFile,
   stylesFile,
   componentIndex,
-  getTokenFile,
+  getReactTokenFile,
   stylesComponentFile,
   tokensIndex,
   packageExportsJson,

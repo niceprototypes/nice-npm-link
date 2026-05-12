@@ -57,7 +57,7 @@ function buildFileTree(componentName) {
       [`src/components/${componentName}/index.ts`, "componentIndex"],
     
       // Token wrapper files
-      [`src/tokens/get${componentName}Token.ts`, "getTokenFile"],
+      [`src/tokens/get${componentName}Token.ts`, "getReactTokenFile"],
       [`src/tokens/${componentName}Styles.ts`, "stylesComponentFile"],
       ["src/tokens/index.ts", "tokensIndex"],
     ];

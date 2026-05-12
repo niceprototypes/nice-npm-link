@@ -16,7 +16,7 @@ const { toPrefix } = require('./helpers');
  * @param {string} componentName - PascalCase component name
  * @returns {string}
  */
-function getTokenFile(componentName) {
+function getReactTokenFile(componentName) {
   const prefix = toPrefix(componentName);
   return `import { getComponentToken, type TokenResult } from "nice-react-styles"
 
@@ -68,4 +68,4 @@ export { get${componentName}Token } from "./get${componentName}Token"
 `;
 }
 
-module.exports = { getTokenFile, stylesComponentFile, tokensIndex };
+module.exports = { getReactTokenFile, stylesComponentFile, tokensIndex };
