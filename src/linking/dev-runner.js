@@ -77,9 +77,18 @@ function spawnDevProcess(pkgPath, color) {
   const label = pkgName.replace('nice-', '').padEnd(20);
   const prefix = `${color}[${label}]${RESET} `;
 
+  // `detached: true` puts the child in its own process group so the
+  // controller can signal the whole tree (npm + rollup -c -w) with one
+  // call to `process.kill(-pid, ...)` on shutdown. Without it, SIGTERM
+  // reaches only the immediate `npm` and the rollup watcher gets
+  // reparented to launchd as a long-lived orphan.
+  //
+  // `shell: false` (default) makes npm the direct child instead of
+  // putting `/bin/sh -c "..."` between us and it — eliminates one
+  // signal-propagation layer.
   const child = spawn('npm', ['run', 'dev'], {
     cwd: pkgPath,
-    shell: true,
+    detached: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -175,11 +184,20 @@ function startDevRunner(projectDir, options = {}) {
   return {
     processes,
     stop() {
-      for (const { name, process } of processes) {
+      for (const { name, process: child } of processes) {
         if (verbose) {
           info(`Stopping ${name}...`);
         }
-        process.kill('SIGTERM');
+        // Negative pid signals the entire process group created by
+        // `detached: true` — npm AND its rollup grandchild both receive
+        // SIGTERM, so neither survives as an orphan.
+        try {
+          process.kill(-child.pid, 'SIGTERM');
+        } catch {
+          // Already dead, or no group (race) — fall back to the direct
+          // child kill so we still try.
+          try { child.kill('SIGTERM'); } catch { /* gone */ }
+        }
       }
       info('Stopped all dev processes');
     },
